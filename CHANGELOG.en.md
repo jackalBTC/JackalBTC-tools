@@ -6,6 +6,14 @@ What changed in each version, newest first. To upgrade: `git pull` in the repo, 
 
 ---
 
+## v0.3.1 — 2026-10-30 · Mint stats
+
+### Improved
+- The "minted today" card at the top of the dashboard now also shows **yesterday** (projects / transactions) and the **running total** since the first mint, with the start date. Hover to see which projects were minted today and yesterday.
+- Only successful on-chain mints count; a transaction logged twice counts once; failed ones are excluded.
+
+---
+
 ## v0.3.0 — 2026-10-30 · Multiple wallets
 
 ### Added

@@ -688,7 +688,13 @@ function renderEvents() {
 async function loadEvents() {
   EV = await get('/api/events').catch(() => []); renderEvents();
   const t = await get('/api/today').catch(() => null);
-  if (t) { $('#kToday').textContent = `${t.count} 笔`; $('#kTodayS').textContent = t.projects.length ? `${t.projects.length} 个项目：${t.projects.join('、')}` : '今天还没有新铸造'; }
+  if (t) {
+    const nm = L => L.map(p => (PROJECTS.find(x => x.id === p) || {}).name || p).join('、');
+    const y = t.yesterday || { count: 0, projects: [] }, a = t.total || { count: 0, projects: [] };
+    $('#kToday').textContent = `${t.projects.length} 个项目`;
+    $('#kTodayS').innerHTML = `今天 ${t.count} 笔 · 昨天 ${y.projects.length} 个项目 / ${y.count} 笔<br>累计 <b class="num">${a.projects.length}</b> 个项目 / ${a.count} 笔${a.since ? `（${new Date(a.since).toLocaleDateString('zh-CN')} 起）` : ''}`;
+    $('#kTodayS').title = `今天：${nm(t.projects) || '还没有'}\n昨天：${nm(y.projects) || '没有'}`;
+  }
 }
 
 document.addEventListener('click', e => {

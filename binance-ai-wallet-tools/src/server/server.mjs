@@ -253,9 +253,20 @@ http.createServer(async (req, res) => {
     switch (url.pathname) {
       case '/api/radar': return json(await cached('radar', 15e3, radar));
       case '/api/events': return json(readEvents(300).reverse());
-      case '/api/today': {   // 今天的到手笔数：读完整日志，不受列表条数限制
-        const day = new Date().toDateString(), ex = readEvents(1e6).filter(e => e.action === 'confirm' && new Date(e.ts).toDateString() === day).map(e => e.project);
-        return json({ count: ex.length, projects: [...new Set(ex)] });
+      case '/api/today': {   // 今天 / 昨天 / 累计打了多少（只算链上成功的，按项目和笔数）：读完整日志，不受列表条数限制
+        const d0 = new Date(), today = d0.toDateString(), yday = new Date(d0 - 864e5).toDateString();
+        const seen = new Set(), by = { today: [], yday: [], all: [] };
+        let since = null;
+        for (const e of readEvents(1e6)) {
+          if (e.action !== 'confirm' || /status=0x0|失败|revert/i.test(e.detail || '')) continue;
+          const k = e.txHash || `${e.project}|${e.detail}`;   // 同一笔记了两次只算一次
+          if (seen.has(k)) continue; seen.add(k);
+          since ||= e.ts;
+          const d = new Date(e.ts).toDateString();
+          by.all.push(e.project); if (d === today) by.today.push(e.project); if (d === yday) by.yday.push(e.project);
+        }
+        const pack = a => ({ count: a.length, projects: [...new Set(a)] });
+        return json({ ...pack(by.today), yesterday: pack(by.yday), total: { ...pack(by.all), since } });
       }
       case '/api/news': return json(readJson('news.json', []).sort((a, b) => String(b.ts).localeCompare(String(a.ts))));
       case '/api/projects': {
