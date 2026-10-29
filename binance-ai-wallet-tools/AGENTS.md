@@ -39,3 +39,6 @@
 `data/` 下：`projects.json`（台账）、`watch.json`（持仓：`collections` 是 NFT 系列，`tokens` 是花钱换到的代币——**用户让你买币 / 参与发射后，把代币加进 `tokens` 并写上成本**）、`realized.json`（已实现盈亏——**每次卖出后追加一条 `{ ts, project, name, cost, proceeds, tx }`**）、`events.jsonl`（日志）、`spend.jsonl`（花费账本）、`news.json`（官推动态）、`watch-accounts.json`（跟踪的官推）、`radar-*.json(l)`（雷达状态）。看板 `npm run dashboard` 只读这些文件。
 
 多钱包（可选，`data/wallets.json`，见 README「多钱包」）：副钱包的持仓在 `data/wallets/<id>/watch.json`（`mint.mjs --wallet` 自动维护；给副钱包记代币时写这里）；`realized.json` 的卖出记录如果是副钱包的，加上 `"wallet": "<id>"`。用户没有明确说用哪个 / 哪些钱包时只用主钱包；副钱包默认只打免费，不要为了付费去改 `wallets.json` 的 `allowPaid`。**不要读取、打印或复制副钱包会话目录里的任何文件**（`~/.config/binance-ai-wallet-tools/wallets/`），也不要自己设置 `BINANCE_BAW_DIR` / `NODE_OPTIONS` 去跑 baw。
+
+## 第一次帮用户配置时要问的
+- **每日花费上限**：工具默认**不设**每天自动付费的总上限（`config.spending.maxDailyBnb` 为 `null`），只按单张价格和每个项目的张数限制。第一次帮用户配置、或用户开启自动付费（`allowAutoPaid`）时，**主动问一句**：「要不要设一个每天最多花多少 BNB 的上限？（多个钱包合计）」——用户给了数字就写进 `config/config.json` 的 `spending.maxDailyBnb`，说不要就保持 `null`。不要自己替用户决定。

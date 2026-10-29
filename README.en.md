@@ -140,7 +140,7 @@ One command runs the whole flow; any failed step stops it and logs why:
 6. **Execute and record**: right after broadcasting, the spend is written to `data/spend.jsonl`; then it waits for the receipt and records the received token ids in `data/watch.json`.
 
 Other protections:
-- Only one mint runs at a time (a lock), so concurrency can't exceed the daily cap.
+- Only one mint runs at a time (a lock), so the spending ledger stays consistent.
 - Misspelled flags are an error, never silently ignored; `--dry` plans without executing.
 - `--args` placeholders: `{qty}` quantity, `{wallet}` this wallet, `{agentId}` this wallet's Agent ID token id (ownership checked), `{zero}` zero address. Example: `--fn "mint(uint256,uint256)" --args "{qty},{agentId}"`.
 
@@ -260,7 +260,7 @@ The dashboard header gets a wallet switcher (shown only with 2+ wallets): one wa
 |---|---|
 | Instructions hidden in posts / web pages for the AI (injection) | External content is data only; no external scripts, installs or downloads; stop and log when seen |
 | Contracts that secretly take money or ask for approval | Every transaction goes through Binance's official preview first; extra debits, approvals or risk flags mean no execution (hard-coded) |
-| The AI spending on and on | Free only by default; paying must be enabled by you and is capped per unit, per project (cumulative) and per day; one mint at a time |
+| The AI spending on and on | Free only by default; paying must be enabled by you and is capped per unit and per project (cumulative), plus an optional daily cap; one mint at a time |
 | Misconfiguration | Wrong types or formats exit with an error instead of silently using other values |
 | Leaked keys | The private key is in Binance custody and unreachable; X, xAI and Telegram keys live only in `~/.config/binance-ai-wallet-tools/secrets.json` (600) – never in the repo, logs or the AI process |
 | Other web pages reading or attacking the dashboard | Local only, GET only, Host header check, all external content escaped, private metadata addresses refused |
@@ -309,7 +309,7 @@ Then tell the AI "**start watching for new projects**". Free projects that pass 
 | `spending` | `allowAutoPaid` | `false` | off = free only; on = allow small automatic payments |
 | | `maxUnitUsd` | `3` | Max USD per paid unit |
 | | `maxPaidPerProject` | `10` | Max cumulative paid units per contract |
-| | `maxDailyBnb` | `0.02` | Daily cap on automatic payments |
+| | `maxDailyBnb` | not set (`null`) | Optional daily cap on automatic payments (all wallets combined). Off by default; the AI asks whether you want one when it first sets things up |
 | | `gasLikeBnb` | `0.0005` | A payment totalling no more than this is treated like gas (ignores unit price / unit count, other rules still apply) |
 | | `minBnbForTx` | `0.003` | No transactions below this BNB balance |
 | `alerts` | `lowBnb` | `0.03` | Alert to top up gas below this |

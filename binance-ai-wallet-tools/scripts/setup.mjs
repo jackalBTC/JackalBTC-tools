@@ -93,7 +93,8 @@ cfg.spending.allowAutoPaid = await yes('开启小额自动付费？', cfg.spendi
 if (cfg.spending.allowAutoPaid) {
   cfg.spending.maxUnitUsd = Number(await ask('单张最多多少美元？', String(cfg.spending.maxUnitUsd))) || cfg.spending.maxUnitUsd;
   cfg.spending.maxPaidPerProject = Number(await ask('每个项目最多付费几张？', String(cfg.spending.maxPaidPerProject))) || cfg.spending.maxPaidPerProject;
-  cfg.spending.maxDailyBnb = Number(await ask('每天最多花多少 BNB？', String(cfg.spending.maxDailyBnb))) || cfg.spending.maxDailyBnb;
+  const daily = (await ask('要不要设「每天最多花多少 BNB」？直接回车 = 不设，填数字 = 设', cfg.spending.maxDailyBnb == null ? '' : String(cfg.spending.maxDailyBnb))).trim();
+  cfg.spending.maxDailyBnb = daily && Number(daily) >= 0 ? Number(daily) : null;
 }
 // Telegram（可选）：手机上收提醒 + 只读查询
 say('\n--- Telegram 提醒（可选） ---');

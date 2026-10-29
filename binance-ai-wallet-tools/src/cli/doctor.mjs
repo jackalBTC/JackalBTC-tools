@@ -46,7 +46,7 @@ if (bawOk) {   // 多钱包（data/wallets.json，可选）：逐个核对副钱
 console.log('\n配置');
 fs.existsSync(CONFIG_FILE) ? ok('config/config.json 存在') : warn('还没有 config/config.json，正在使用默认值（运行 npm run setup 生成）');
 const sp = config.spending;
-ok(`自动付费：${sp.allowAutoPaid ? `开（单张 ≤ $${sp.maxUnitUsd}，每项目 ≤ ${sp.maxPaidPerProject} 张，每天 ≤ ${sp.maxDailyBnb} BNB）` : '关（只打免费）'}`);
+ok(`自动付费：${sp.allowAutoPaid ? `开（单张 ≤ $${sp.maxUnitUsd}，每项目 ≤ ${sp.maxPaidPerProject} 张，${sp.maxDailyBnb != null ? `每天 ≤ ${sp.maxDailyBnb} BNB` : '不设每日上限'}）` : '关（只打免费）'}`);
 
 console.log('\n推特雷达');
 const p = config.radar.provider;

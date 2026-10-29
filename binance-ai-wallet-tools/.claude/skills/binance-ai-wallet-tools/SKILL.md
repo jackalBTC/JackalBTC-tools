@@ -111,7 +111,7 @@ node src/cli/mint.mjs <项目id> <合约> <数量> [--fn "mint(uint256)"] [--arg
 
 ### 2.2 花钱规则（来自 `config.spending`，用户可改）
 - 免费张：报价为 0 且预演通过就打。
-- 付费：只有 `allowAutoPaid=true`，且**源码已验证 + 台账里有官网或官推**，单张 ≤ `maxUnitUsd`、**这个合约累计**付费张数 ≤ `maxPaidPerProject`、当天累计 ≤ `maxDailyBnb` 才自动付（花费记在 `data/spend.jsonl`）；付费合计 ≤ `gasLikeBnb` 视同 gas（不看单价 / 张数，但仍要求验证 + 官源 + allowAutoPaid）。
+- 付费：只有 `allowAutoPaid=true`，且**源码已验证 + 台账里有官网或官推**，单张 ≤ `maxUnitUsd`、**这个合约累计**付费张数 ≤ `maxPaidPerProject`、设了 `maxDailyBnb` 的话当天累计不超过它，才自动付（花费记在 `data/spend.jsonl`）；付费合计 ≤ `gasLikeBnb` 视同 gas（不看单价 / 张数，但仍要求验证 + 官源 + allowAutoPaid）。
 - 不满足：只拿免费张；没有免费张 → 不打，写项目卡进「待确认」（用户想打会在对话里说）。
 - 需要先授权代币（例如只能用 USDT 付款）的，一律「待确认」。
 - **台账里的 `site` / `x` 是付费门槛之一，只能填你核实过的官方来源**（官网能链到官推、或官推简介链回官网）。不能为了让付费通过而填推广号、转发号或推文里给的网址。

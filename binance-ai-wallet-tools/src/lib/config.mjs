@@ -26,8 +26,10 @@ const merge = (a, b) => {
 function validate(cfg) {
   const errs = [], sp = cfg.spending || {};
   if (typeof sp.allowAutoPaid !== 'boolean') errs.push('spending.allowAutoPaid 必须是 true 或 false（不要加引号）');
-  for (const k of ['maxUnitUsd', 'maxPaidPerProject', 'maxDailyBnb', 'gasLikeBnb', 'minBnbForTx'])
+  for (const k of ['maxUnitUsd', 'maxPaidPerProject', 'gasLikeBnb', 'minBnbForTx'])
     if (typeof sp[k] !== 'number' || !Number.isFinite(sp[k]) || sp[k] < 0) errs.push(`spending.${k} 必须是不小于 0 的数字`);
+  // 每日上限可选：null / 不写 = 不设每日上限（默认）；写了就必须是不小于 0 的数字
+  if (sp.maxDailyBnb != null && (typeof sp.maxDailyBnb !== 'number' || !Number.isFinite(sp.maxDailyBnb) || sp.maxDailyBnb < 0)) errs.push('spending.maxDailyBnb 要么不写（不设每日上限），要么是不小于 0 的数字');
   if (typeof cfg.alerts?.lowBnb !== 'number') errs.push('alerts.lowBnb 必须是数字');
   if (!['twitterapi', 'grok'].includes(cfg.radar?.provider)) errs.push('radar.provider 只能是 twitterapi 或 grok');
   if (!(cfg.radar?.intervalMinutes >= 5)) errs.push('radar.intervalMinutes 至少 5');

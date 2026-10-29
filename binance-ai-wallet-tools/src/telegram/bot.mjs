@@ -128,7 +128,7 @@ async function status() {
   if (WS.length > 1) lines.push('');
   const rs = readJson('radar-state.json', {});
   lines.push(`📡 雷达上一轮：${rs.lastRun ? new Date(rs.lastRun).toLocaleString('zh-CN', { hour12: false }) : '还没跑过'}（数据源 ${config.radar.provider}）`);
-  lines.push(`💸 自动付费：${config.spending.allowAutoPaid ? `开（每天 ≤ ${config.spending.maxDailyBnb} BNB）` : '关（只打免费）'}${WS.length > 1 ? '；副钱包只打免费（设了 allowPaid 的除外）' : ''}`);
+  lines.push(`💸 自动付费：${config.spending.allowAutoPaid ? `开（${config.spending.maxDailyBnb != null ? `每天 ≤ ${config.spending.maxDailyBnb} BNB` : '不设每日上限'}）` : '关（只打免费）'}${WS.length > 1 ? '；副钱包只打免费（设了 allowPaid 的除外）' : ''}`);
   return lines.join('\n');
 }
 function recentRadar() {

@@ -78,7 +78,7 @@ In `spending` of `config/config.json` (`npm run setup` also asks):
 | `allowAutoPaid` | `false` | off = free mints only; on = allow small automatic payments |
 | `maxUnitUsd` | `3` | Max USD per paid unit |
 | `maxPaidPerProject` | `10` | Max paid units per project (cumulative) |
-| `maxDailyBnb` | `0.02` | Daily cap on automatic payments |
+| `maxDailyBnb` | `null` (off) | Optional daily cap on automatic payments, off by default |
 | `gasLikeBnb` | `0.0005` | A payment totalling no more than this is treated like gas |
 | `minBnbForTx` | `0.003` | No transactions when wallet BNB is below this |
 

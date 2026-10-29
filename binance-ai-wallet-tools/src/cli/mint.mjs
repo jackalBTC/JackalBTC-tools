@@ -12,8 +12,8 @@
 // 花钱规则（config.spending）：
 //   - 免费张永远可以打；
 //   - 付费需要 allowAutoPaid=true，且源码已验证（Sourcify）+ 台账里有官网或官推 + 单张 ≤ maxUnitUsd；
-//   - 张数：这个钱包在这个合约的历史累计付费 ≤ maxPaidPerProject；金额：当天所有钱包累计付费 ≤ maxDailyBnb。超出时自动减少付费张数，减到 0 就只打免费张；
-//   - 付费合计 ≤ gasLikeBnb 时视同 gas，不看单价 / 张数上限（仍受上面的开关、验证、官源和每日上限约束）；
+//   - 张数：这个钱包在这个合约的历史累计付费 ≤ maxPaidPerProject；金额：设了 maxDailyBnb 才看「当天所有钱包累计付费」（默认不设）。超出时自动减少付费张数，减到 0 就只打免费张；
+//   - 付费合计 ≤ gasLikeBnb 时视同 gas，不看单价 / 张数上限（仍受上面的开关、验证、官源约束，设了每日上限也算进去）；
 //   - 花费记在 data/spend.jsonl（只追加，多钱包时带 wallet 字段，没有的算主钱包），每日 / 每项目上限都按它算；同一时间只允许一个 mint 在跑（data/.mint.lock）。
 // 钱包会话：开头、预演前、执行前各核对一次「baw 当前登录的就是这个钱包」，对不上就停。
 // 预演把关（写死，不能配置关掉，缺字段一律按不通过处理）：
@@ -88,7 +88,7 @@ if (!DRY) {
     if (age > 15 * 60_000) fs.rmSync(LOCK, { force: true });   // 超过 15 分钟的锁视为残留
   } catch {}
   try { fs.writeFileSync(LOCK, String(process.pid), { flag: 'wx' }); }
-  catch { console.log('另一个 mint 正在运行（data/.mint.lock），等它结束再试。为了不超出每日上限，同一时间只允许一个。'); process.exit(5); }
+  catch { console.log('另一个 mint 正在运行（data/.mint.lock），等它结束再试。同一时间只允许一个，花费账本才不会算乱。'); process.exit(5); }
   process.on('exit', () => { try { if (fs.readFileSync(LOCK, 'utf8') === String(process.pid)) fs.rmSync(LOCK); } catch {} });
   for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(130));
 }
@@ -175,7 +175,7 @@ if (!ex.success) stop('执行失败：' + JSON.stringify(ex.error || ex).slice(0
 const tx = ex.data?.txHash;
 if (!tx) stop('执行未广播（可能需要在币安 App 里确认）：' + JSON.stringify(ex.data).slice(0, 160));
 try { fs.appendFileSync(dataFile(SPEND), JSON.stringify({ ts: new Date().toISOString(), pid, contract: to, paid, bnb: Number(total) / 1e18, tx, ...(WTAG ? { wallet: WTAG } : {}) }) + '\n'); }
-catch (e) { console.error(`❌❌ 交易已广播（${tx}），但花费账本写入失败：${e.message}。请手动把这笔记到 data/spend.jsonl，否则每日上限会算少。`); }
+catch (e) { console.error(`❌❌ 交易已广播（${tx}），但花费账本写入失败：${e.message}。请手动把这笔记到 data/spend.jsonl，否则付费上限会算少。`); }
 log('execute', `铸造 ${qty} 张（免费 ${free} + 付费 ${paid}）`, { tx, contract: to, value: `${(Number(total) / 1e18).toFixed(6)} BNB` });
 const rc = await waitReceipt(tx);
 if (!rc) { console.log('回执还没出来，稍后在 BscScan 查：' + tx); process.exit(3); }

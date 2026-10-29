@@ -98,3 +98,8 @@ test('ABI 报价：返回值含义不明（多个无名 uint）→ 不认', () =
 test('ABI 报价：没有数量参数的不认（单价函数由别处处理）', () => {
   assert.equal(pickQuoteFromAbi([fn('quote', [['address', 'a']], [['uint256', 'cost']])]), null);
 });
+
+test('付费：没设每日上限（null，默认）时不按每日金额减', async () => {
+  const r = await planPaid({ free: 0, paid: 5, totalOf: perUnit(E / 1000n) }, ctx({ spentToday: 100, spending: { ...S, maxDailyBnb: null } }));
+  assert.equal(r.paid, 5);
+});

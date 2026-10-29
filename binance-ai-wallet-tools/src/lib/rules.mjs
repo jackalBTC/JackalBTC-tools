@@ -56,13 +56,13 @@ export async function planPaid({ free, paid, totalOf }, ctx) {
   while (paid > 0) {
     const gasLike = bnb(total) <= S.gasLikeBnb;
     const overCount = !gasLike && ctx.paidSoFar + paid > S.maxPaidPerProject;
-    const overDaily = ctx.spentToday + bnb(total) > S.maxDailyBnb;
+    const overDaily = S.maxDailyBnb != null && ctx.spentToday + bnb(total) > S.maxDailyBnb;   // 没设每日上限就不看
     if (!overCount && !overDaily) break;
     paid--;
     total = paid ? await totalOf(free + paid) : 0n;
     if (total === null) return { paid: 0, total: 0n, notes: ['读不到报价'] };
   }
-  if (paid < want) notes.push(`付费从 ${want} 张减到 ${paid} 张（这个合约已付 ${ctx.paidSoFar} 张，上限 ${S.maxPaidPerProject}；今天已付 ${ctx.spentToday.toFixed(5)} BNB，上限 ${S.maxDailyBnb}）`);
+  if (paid < want) notes.push(`付费从 ${want} 张减到 ${paid} 张（这个合约已付 ${ctx.paidSoFar} 张，上限 ${S.maxPaidPerProject}；今天已付 ${ctx.spentToday.toFixed(5)} BNB${S.maxDailyBnb != null ? `，上限 ${S.maxDailyBnb}` : ''}）`);
   return { paid, total, notes };
 }
 

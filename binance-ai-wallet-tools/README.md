@@ -78,7 +78,7 @@ Claude 会跟踪雷达日志：免费且通过核验的项目自动打，拿不�
 | `allowAutoPaid` | `false` | 关 = 只打免费张；开 = 允许小额自动付费 |
 | `maxUnitUsd` | `3` | 单张最多多少美元 |
 | `maxPaidPerProject` | `10` | 每个项目最多付费几张 |
-| `maxDailyBnb` | `0.02` | 每天自动付费合计上限 |
+| `maxDailyBnb` | `null`（不设） | 可选：每天自动付费合计上限，默认不设 |
 | `gasLikeBnb` | `0.0005` | 一次付费合计不超过这个数时视同 gas |
 | `minBnbForTx` | `0.003` | 钱包 BNB 低于这个数不发交易 |
 

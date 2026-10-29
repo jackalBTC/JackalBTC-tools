@@ -139,7 +139,7 @@
 6. **执行与记账**：广播后立刻记进花费账本 `data/spend.jsonl`，等回执，把拿到的 tokenId 写进持仓 `data/watch.json`。
 
 其他保护：
-- 同一时间只允许一个 mint 运行（加锁），并发也不会超出每日上限。
+- 同一时间只允许一个 mint 运行（加锁），花费账本不会算乱。
 - 参数拼错直接报错，不会被当成没写；`--dry` 只算计划不执行。
 - `--args` 占位符：`{qty}` 数量、`{wallet}` 本钱包、`{agentId}` 本钱包的 Agent ID 编号（会核对归属）、`{zero}` 零地址。例：`--fn "mint(uint256,uint256)" --args "{qty},{agentId}"`。
 
@@ -308,7 +308,7 @@ claude                     # 在本目录打开 Claude Code（或 codex）
 | `spending` | `allowAutoPaid` | `false` | 关 = 只打免费；开 = 允许小额自动付费 |
 | | `maxUnitUsd` | `3` | 单张最多多少美元 |
 | | `maxPaidPerProject` | `10` | 每个合约累计最多付费几张 |
-| | `maxDailyBnb` | `0.02` | 每天自动付费合计上限 |
+| | `maxDailyBnb` | 不设（`null`） | 可选：每天自动付费合计上限（所有钱包加起来）。默认不设；AI 第一次帮你配置时会问你要不要设 |
 | | `gasLikeBnb` | `0.0005` | 一次付费合计不超过这个数，视同 gas（不看单价 / 张数，仍受其他约束） |
 | | `minBnbForTx` | `0.003` | BNB 低于这个数不发交易 |
 | `alerts` | `lowBnb` | `0.03` | 低于这个数提醒补 gas |
