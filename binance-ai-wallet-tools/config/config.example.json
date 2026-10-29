@@ -32,8 +32,10 @@
     "chatIds": [],
     "radarLog": "",
     "_radarLog": "留空 = logs/radar.log；雷达日志在别处时填路径",
-    "notify": ["CANDIDATE", "HOT", "MINT", "PENDING", "ABORT", "LOWBNB", "NOTCONNECTED", "DEVMODE", "ERR"],
-    "_notify": "要推送哪些：CANDIDATE 新线索 / HOT 多人在传 / UPDATE 官推动态 / MINT 铸造成功 / PENDING 等你决定 / ABORT 中止 / LOWBNB / NOTCONNECTED / DEVMODE / ERR"
+    "notify": ["NEWS", "CANDIDATE", "HOT", "MINT", "PENDING", "ABORT", "LOWBNB", "NOTCONNECTED", "DEVMODE", "ERR"],
+    "newsLevels": ["重要", "机会", "注意"],
+    "_newsLevels": "NEWS = 已参与项目的动态（AI 写进 data/news.json 的中文总结），按等级筛选：重要 / 机会 / 注意 / 一般",
+    "_notify": "要推送哪些：NEWS 项目动态 / CANDIDATE 新线索 / HOT 多人在传 / UPDATE 官推动态 / MINT 铸造成功 / PENDING 等你决定 / ABORT 中止 / LOWBNB / NOTCONNECTED / DEVMODE / ERR"
   },
 
   "agent": {

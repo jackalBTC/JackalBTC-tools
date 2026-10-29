@@ -30,7 +30,22 @@ export function formatEvent(e) {
   return null;
 }
 
-export const KIND_LABEL = { CANDIDATE: '新线索', HOT: '多人在传', UPDATE: '官推动态', MINT: '铸造成功', PENDING: '等你决定', ABORT: '中止', LOWBNB: 'BNB 不足', NOTCONNECTED: '钱包掉线', DEVMODE: '开发者模式', ERR: '雷达出错' };
+// 已参与项目的动态（data/news.json 里由 AI 写的中文总结）→ 消息
+export const newsId = x => `${x?.project}|${x?.ts}|${x?.title}`;
+export function formatNews(x, projects = []) {
+  if (!x || typeof x !== 'object' || !x.title) return null;
+  const name = (projects.find(p => p.id === x.project) || {}).name || x.project;
+  const icon = { 重要: '❗', 机会: '💡', 注意: '⚠️', 一般: '📣' }[x.level] || '📣';
+  const url = /^https:\/\/(x|twitter)\.com\/[A-Za-z0-9_]+\/status\/\d+$/.test(x.url || '') ? '\n' + x.url : '';
+  return { kind: 'NEWS', level: x.level || '一般', text: clip(`${icon} 项目动态 · ${oneLine(x.level || '一般')}\n${oneLine(name)}：${oneLine(x.title)}\n${oneLine(x.summary)}${x.action ? '\n→ ' + oneLine(x.action) : ''}${url}`, 1500) };
+}
+export function newsList(news, projects = [], n = 5) {
+  const list = [...(news || [])].sort((a, b) => String(b.ts).localeCompare(String(a.ts))).slice(0, n);
+  if (!list.length) return '📣 还没有项目动态';
+  return '📣 最近的项目动态\n\n' + list.map(x => formatNews(x, projects)?.text).filter(Boolean).join('\n\n');
+}
+
+export const KIND_LABEL = { NEWS: '项目动态', CANDIDATE: '新线索', HOT: '多人在传', UPDATE: '官推动态', MINT: '铸造成功', PENDING: '等你决定', ABORT: '中止', LOWBNB: 'BNB 不足', NOTCONNECTED: '钱包掉线', DEVMODE: '开发者模式', ERR: '雷达出错' };
 
 // 「今天」的铸造汇总
 export function todaySummary(events, now = new Date()) {

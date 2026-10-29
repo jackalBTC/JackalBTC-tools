@@ -7,15 +7,16 @@
 
 | 类型 | 什么时候推 |
 |---|---|
+| `NEWS` | 已参与项目的最新动态：AI 读完官推后写的中文总结（`data/news.json`），按 `telegram.newsLevels` 筛等级，默认推「重要 / 机会 / 注意」 |
 | `CANDIDATE` / `HOT` | 雷达发现新线索 / 多人在传 |
-| `UPDATE` | 已参与项目的官推新帖（默认不推，比较多） |
+| `UPDATE` | 已参与项目官推的原帖（默认不推，量大且多是互动回复；看 `NEWS` 的总结就够了） |
 | `MINT` | 铸造成功（带交易链接） |
 | `PENDING` | 有项目等你决定 |
 | `ABORT` | 某次铸造被安全检查拦下 |
 | `LOWBNB` / `NOTCONNECTED` / `DEVMODE` | BNB 不足 / 钱包掉线 / 开发者模式关闭或快到期 |
 | `ERR` | 雷达出错 |
 
-**查询命令**（只读）：`/status` 钱包和余额、`/pending` 等你决定的项目、`/today` 今天铸造了什么、`/radar` 最近的线索、`/settings` 推送设置。
+**查询命令**（只读）：`/status` 钱包和余额、`/pending` 等你决定的项目、`/today` 今天铸造了什么、`/news` 已参与项目的最新动态、`/radar` 最近的线索、`/settings` 推送设置。
 
 ## 它不会做什么
 - **不能下单、不能花钱、不能改配置。** 要打 / 不打，还是在 Claude Code 等 AI 助手里说。这样即使机器人 token 或你的 Telegram 账号泄露，别人也动不了钱包。

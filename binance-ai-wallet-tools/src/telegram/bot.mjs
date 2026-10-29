@@ -11,7 +11,7 @@ import path from 'node:path';
 import { config, getSecret, readJson, writeJson, ROOT, dataFile } from '../lib/config.mjs';
 import { baw, rpc, walletAddress } from '../lib/chain.mjs';
 import { readEvents } from '../lib/events.mjs';
-import { parseRadarLine, formatEvent, todaySummary, pendingList, KIND_LABEL, clip, oneLine } from './format.mjs';
+import { parseRadarLine, formatEvent, todaySummary, pendingList, formatNews, newsList, newsId, KIND_LABEL, clip, oneLine } from './format.mjs';
 
 const T = config.telegram || {};
 const log = (...a) => console.log(new Date().toLocaleString('zh-CN', { hour12: false }), ...a);
@@ -19,7 +19,8 @@ const token = getSecret('telegram');
 if (!token) { log('ERR', '没有 Telegram 机器人 token，运行 npm run setup 配置。配好前每 10 分钟检查一次。'); }
 const API = m => `https://api.telegram.org/bot${getSecret('telegram')}/${m}`;
 const allowed = new Set((T.chatIds || []).map(String));
-const notifyKinds = new Set(T.notify || ['CANDIDATE', 'HOT', 'MINT', 'PENDING', 'ABORT', 'LOWBNB', 'NOTCONNECTED', 'DEVMODE', 'ERR']);
+const notifyKinds = new Set(T.notify || ['NEWS', 'CANDIDATE', 'HOT', 'MINT', 'PENDING', 'ABORT', 'LOWBNB', 'NOTCONNECTED', 'DEVMODE', 'ERR']);
+const newsLevels = new Set(T.newsLevels || ['重要', '机会', '注意']);
 const RADAR_LOG = T.radarLog ? path.resolve(ROOT, T.radarLog) : path.join(ROOT, 'logs/radar.log');   // 可在配置里指定雷达日志位置
 
 async function tg(method, body) {
@@ -60,6 +61,20 @@ async function pushTick() {
   const msgs = [];
   for (const l of newLines(RADAR_LOG, 'radarOffset')) { const m = parseRadarLine(l); if (m && notifyKinds.has(m.kind)) msgs.push(m.text); }
   for (const l of newLines(dataFile('events.jsonl'), 'eventsOffset')) { try { const m = formatEvent(JSON.parse(l)); if (m && notifyKinds.has(m.kind)) msgs.push(m.text); } catch {} }
+  // 项目动态：news.json 里新出现的条目（第一次运行只记下已有的，不补发）
+  const news = readJson('news.json', []);
+  if (Array.isArray(news)) {
+    const seen = new Set(st.newsSeen || []), first = !st.newsSeen;
+    const projects = readJson('projects.json', []);
+    for (const x of news) {
+      const id = newsId(x);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      if (first || !notifyKinds.has('NEWS') || !newsLevels.has(x.level || '一般')) continue;
+      const m = formatNews(x, projects); if (m) msgs.push(m.text);
+    }
+    st.newsSeen = [...seen].slice(-2000);
+  }
   writeJson(STATE, st);
   for (const m of msgs) await send(m);
 }
@@ -70,6 +85,7 @@ const HELP = [
   '/status 钱包、余额、雷达状态',
   '/pending 等你决定的项目',
   '/today 今天铸造了什么',
+  '/news 已参与项目的最新动态',
   '/radar 最近的雷达线索',
   '/settings 我会推送哪些提醒',
   '',
@@ -106,7 +122,8 @@ async function handle(msg) {
   else if (cmd === '/pending') reply = pendingList(readJson('projects.json', []));
   else if (cmd === '/today') reply = todaySummary(readEvents(5000));
   else if (cmd === '/radar') reply = recentRadar();
-  else if (cmd === '/settings') reply = '🔔 会推送：' + [...notifyKinds].map(k => KIND_LABEL[k] || k).join('、') + '\n改 config/config.json 的 telegram.notify 后重启机器人生效。';
+  else if (cmd === '/news') reply = newsList(readJson('news.json', []), readJson('projects.json', []));
+  else if (cmd === '/settings') reply = '🔔 会推送：' + [...notifyKinds].map(k => KIND_LABEL[k] || k).join('、') + `\n项目动态推送等级：${[...newsLevels].join('、')}` + '\n改 config/config.json 的 telegram.notify / newsLevels 后重启机器人生效。';
   else reply = HELP;
   await send(reply, [chat]);
 }

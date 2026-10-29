@@ -42,3 +42,17 @@ test('今天汇总 / 待确认列表', () => {
   assert.match(pendingList([]), /没有/);
   assert.match(pendingList([{ status: '待确认', name: 'X', card: { question: '要不要付 3U？' } }]), /X：要不要付 3U？/);
 });
+
+import { formatNews, newsList } from '../src/telegram/format.mjs';
+test('项目动态：用台账里的项目名，带等级图标、建议动作和原帖', () => {
+  const m = formatNews({ ts: '2026-10-29T10:00:00Z', project: 'p1', level: '机会', title: '开放市场', summary: '可以挂单了', action: '去看地板价', url: 'https://x.com/p1/status/12345678' }, [{ id: 'p1', name: '项目一' }]);
+  assert.equal(m.kind, 'NEWS');
+  assert.match(m.text, /💡 项目动态 · 机会\n项目一：开放市场\n可以挂单了\n→ 去看地板价\nhttps:\/\/x\.com\/p1\/status\/12345678/);
+});
+test('项目动态：链接不是 X 原帖就不带；列表按时间倒序最多 5 条', () => {
+  assert.doesNotMatch(formatNews({ project: 'p', title: 't', summary: 's', url: 'javascript:alert(1)' }).text, /javascript/);
+  const news = Array.from({ length: 7 }, (_, i) => ({ ts: `2026-10-29T0${i}:00:00Z`, project: 'p', level: '一般', title: 'T' + i, summary: 's' }));
+  const out = newsList(news);
+  assert.match(out, /T6/); assert.doesNotMatch(out, /T1/);
+  assert.match(newsList([]), /还没有/);
+});
