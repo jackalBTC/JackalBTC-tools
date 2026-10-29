@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { config, getSecret, readJson, writeJson, ROOT, dataFile } from '../lib/config.mjs';
-import { baw, rpc, walletAddress } from '../lib/chain.mjs';
+import { baw, rpc, walletAddress, bnbUsd } from '../lib/chain.mjs';
 import { readEvents } from '../lib/events.mjs';
 import { parseRadarLine, formatEvent, todaySummary, pendingList, formatNews, newsList, newsId, KIND_LABEL, clip, oneLine } from './format.mjs';
 
@@ -56,11 +56,27 @@ function newLines(file, key) {
   st[key] += Buffer.byteLength(text.slice(0, last + 1));
   return text.slice(0, last).split('\n').filter(Boolean);
 }
+// 铸造花了多少：交易里付的 BNB（value）+ gas（gasUsed × 实际 gas 价），读不到就不写
+async function txCost(hash) {
+  if (!/^0x[0-9a-fA-F]{64}$/.test(hash || '')) return null;
+  try {
+    const [tx, rc] = await Promise.all([rpc('eth_getTransactionByHash', [hash]), rpc('eth_getTransactionReceipt', [hash])]);
+    if (!tx || !rc) return null;
+    const gasWei = BigInt(rc.gasUsed) * BigInt(rc.effectiveGasPrice || tx.gasPrice || 0);
+    return { valueWei: BigInt(tx.value || 0), gasWei, bnbUsd: await bnbUsd().catch(() => 0) };
+  } catch { return null; }
+}
 async function pushTick() {
   if (!getSecret('telegram') || !allowed.size) return;
   const msgs = [];
   for (const l of newLines(RADAR_LOG, 'radarOffset')) { const m = parseRadarLine(l); if (m && notifyKinds.has(m.kind)) msgs.push(m.text); }
-  for (const l of newLines(dataFile('events.jsonl'), 'eventsOffset')) { try { const m = formatEvent(JSON.parse(l)); if (m && notifyKinds.has(m.kind)) msgs.push(m.text); } catch {} }
+  for (const l of newLines(dataFile('events.jsonl'), 'eventsOffset')) {
+    try {
+      const e = JSON.parse(l), m = formatEvent(e);
+      if (!m || !notifyKinds.has(m.kind)) continue;
+      msgs.push(m.kind === 'MINT' ? (formatEvent(e, await txCost(e.txHash)) || m).text : m.text);
+    } catch {}
+  }
   // 项目动态：news.json 里新出现的条目（第一次运行只记下已有的，不补发）
   const news = readJson('news.json', []);
   if (Array.isArray(news)) {

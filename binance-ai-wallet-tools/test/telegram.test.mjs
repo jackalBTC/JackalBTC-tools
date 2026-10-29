@@ -56,3 +56,13 @@ test('项目动态：链接不是 X 原帖就不带；列表按时间倒序最�
   assert.match(out, /T6/); assert.doesNotMatch(out, /T1/);
   assert.match(newsList([]), /还没有/);
 });
+
+import { costLine } from '../src/telegram/format.mjs';
+test('铸造成功：付费的写付了多少 + gas，免费的写 gas', () => {
+  const tx = '0x' + 'b'.repeat(64);
+  const paid = formatEvent({ action: 'confirm', project: 'p', detail: 'status=0x1', txHash: tx }, { valueWei: 2500000000000000n, gasWei: 30000000000000n, bnbUsd: 700 }).text;
+  assert.match(paid, /付费 0\.0025 BNB（≈\$1\.75） \+ gas 0\.00003 BNB（≈\$0\.02）/);
+  assert.match(formatEvent({ action: 'confirm', project: 'p', detail: 'status=0x1' }, { valueWei: 0n, gasWei: 21000000000000n, bnbUsd: 700 }).text, /免费 · gas 0\.000021 BNB/);
+  assert.equal(costLine(null), '');
+  assert.doesNotMatch(formatEvent({ action: 'confirm', project: 'p', detail: 'status=0x1' }).text, /💰/);
+});

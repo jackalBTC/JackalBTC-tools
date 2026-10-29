@@ -19,12 +19,21 @@ export function parseRadarLine(line) {
   return { kind, text: clip(`${icon}\n${body}${url ? '\n' + url : ''}`, 900) };
 }
 
-// 操作日志一条 → 消息（只推铸造成功、出简报 / 待确认、中止）
-export function formatEvent(e) {
+// 一笔交易花了多少：cost = { valueWei, gasWei, bnbUsd }（bot 从链上回执读出来）。没有就返回空串
+export function costLine(cost) {
+  if (!cost || cost.gasWei == null) return '';
+  const bnb = w => Number(w) / 1e18, px = Number(cost.bnbUsd) || 0;
+  const amt = w => { const b = bnb(w); return `${b.toFixed(b < 0.0001 ? 7 : 5).replace(/0+$/, '').replace(/\.$/, '')} BNB${px ? `（≈$${(b * px).toFixed(2)}）` : ''}`; };
+  const v = BigInt(cost.valueWei || 0), g = BigInt(cost.gasWei);
+  return v > 0n ? `💰 付费 ${amt(v)} + gas ${amt(g)}，合计 ${amt(v + g)}` : `💰 免费 · gas ${amt(g)}`;
+}
+
+// 操作日志一条 → 消息（只推铸造成功、出简报 / 待确认、中止）。cost 可选：铸造成功时附上花费
+export function formatEvent(e, cost) {
   if (!e || typeof e !== 'object') return null;
   const p = oneLine(e.project), d = clip(oneLine(e.detail), 400);
   const tx = /^0x[0-9a-fA-F]{64}$/.test(e.txHash || '') ? `\nhttps://bscscan.com/tx/${e.txHash}` : '';
-  if (e.action === 'confirm' && /status=0x1/.test(e.detail || '')) return { kind: 'MINT', text: `✅ 铸造成功：${p}\n${d}${tx}` };
+  if (e.action === 'confirm' && /status=0x1/.test(e.detail || '')) { const c = costLine(cost); return { kind: 'MINT', text: `✅ 铸造成功：${p}\n${d}${c ? '\n' + c : ''}${tx}` }; }
   if (e.action === 'brief') return { kind: 'PENDING', text: `🤔 等你决定：${p}\n${d}\n（在看板「待你确认」或对 AI 说「打 / 不打」）` };
   if (e.action === 'abort') return { kind: 'ABORT', text: `⛔ 已中止：${p}\n${d}` };
   return null;
