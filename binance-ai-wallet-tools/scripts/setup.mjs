@@ -95,6 +95,34 @@ if (cfg.spending.allowAutoPaid) {
   cfg.spending.maxPaidPerProject = Number(await ask('每个项目最多付费几张？', String(cfg.spending.maxPaidPerProject))) || cfg.spending.maxPaidPerProject;
   cfg.spending.maxDailyBnb = Number(await ask('每天最多花多少 BNB？', String(cfg.spending.maxDailyBnb))) || cfg.spending.maxDailyBnb;
 }
+// Telegram（可选）：手机上收提醒 + 只读查询
+say('\n--- Telegram 提醒（可选） ---');
+say('配置后，新线索、铸造成功、等你决定、余额不足、钱包掉线都会推到你的 Telegram；机器人只读，不能下单。');
+if (await yes('要配置 Telegram 机器人吗？', cfg.telegram?.chatIds?.length ? 'n' : 'n')) {
+  say('1) 在 Telegram 里搜 @BotFather，发送 /newbot，按提示起名字，拿到一串 token（形如 123456789:ABC…）。');
+  const tok = await askSecret('2) 粘贴机器人 token（输入不显示）：');
+  const tgApi = (m, b) => fetch(`https://api.telegram.org/bot${tok}/${m}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b || {}), signal: AbortSignal.timeout(30000) }).then(r => r.json()).catch(() => ({}));
+  const me = tok ? await tgApi('getMe') : {};
+  if (!me.ok) say('⚠️  token 无效或连不上 Telegram，跳过。之后可重新运行 npm run setup。');
+  else {
+    saveSecret('telegram', tok);
+    say(`✅ 机器人 @${me.result.username} 已保存。`);
+    say(`3) 现在用你自己的 Telegram 给 @${me.result.username} 发一条任意消息（比如 /start），我等最多 2 分钟…`);
+    let chat = null, offset = 0;
+    for (let i = 0; i < 6 && !chat; i++) {
+      const u = await tgApi('getUpdates', { offset, timeout: 20 });
+      for (const x of u.result || []) { offset = x.update_id + 1; if (x.message?.chat) chat = x.message.chat; }
+    }
+    if (!chat) say('⚠️  没等到消息，之后重新运行 npm run setup 再绑定。');
+    else if (await yes(`绑定这个聊天：${chat.first_name || chat.title || ''}${chat.username ? ' @' + chat.username : ''}（id ${chat.id}）？`)) {
+      cfg.telegram = { ...(cfg.telegram || {}), chatIds: [...new Set([...(cfg.telegram?.chatIds || []), chat.id])] };
+      await tgApi('getUpdates', { offset });   // 确认掉已读消息
+      await tgApi('sendMessage', { chat_id: chat.id, text: '✅ 已绑定。之后的提醒会发到这里。发送 /help 查看可用命令（只读）。' });
+      say('✅ 已绑定，Telegram 里应该收到一条确认消息。');
+    }
+  }
+}
+
 fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2) + '\n');
 say('✅ 已写入 config/config.json');
 
@@ -110,6 +138,6 @@ say(`
 接下来：
   1. npm run doctor            检查一遍
   2. npm run dashboard          打开看板 http://127.0.0.1:${cfg.dashboard.port}
-  3. npm run radar              启动推特雷达（或 npm run service install 让它们在后台一直跑）
+  3. npm run radar              启动推特雷达（或 npm run service install 让雷达、看板、Telegram 机器人都在后台一直跑）
   4. 在本目录运行 claude        打开 Claude Code，说「开始盯新项目」
 `);

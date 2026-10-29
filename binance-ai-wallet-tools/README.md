@@ -8,6 +8,7 @@
 - **AI 核验**：读合约源码、核对官网和官推、模拟调用，按质量分成「直接打 / 待你确认 / 跳过」。
 - **安全铸造**：一个命令自动读价格、套用你的花钱规则、用币安官方预演把关，再执行。
 - **本地看板**：持仓与地板价、待你确认的项目、雷达线索、已参与项目的官推动态、复盘、完整操作日志。
+- **Telegram 机器人（可选）**：新线索、铸造成功、等你决定、余额不足、钱包掉线推到手机；可以查状态，但不能下单。
 
 > ⚠️ 这是自动化工具，不是投资建议。「免费」NFT 也要花 gas，大多没有市场。请先读 [docs/security.md](docs/security.md)。
 
@@ -30,6 +31,7 @@
 | [Node.js](https://nodejs.org) 20+ | |
 | AI 编程助手（可选） | [Claude Code](https://claude.com/claude-code)、OpenAI Codex 等读 `AGENTS.md` 的工具；不用 AI 也能手动用 |
 | 币安 App 里的 **AI 钱包** | 需要领取 `.ai` Agent ID、打开**开发者模式**，钱包里放一点 BNB 当 gas |
+| Telegram 机器人（可选） | 想在手机上收提醒的话，用 @BotFather 建一个，见 [docs/telegram.md](docs/telegram.md) |
 | 推特数据源 Key（二选一） | [twitterapi.io](https://twitterapi.io) 或 [xAI Grok API](https://console.x.ai)，注册方法见 [docs/providers.md](docs/providers.md) |
 
 ## 三步装好
@@ -63,6 +65,8 @@ Claude 会跟踪雷达日志：免费且通过核验的项目自动打，拿不�
 
 不想后台跑，也可以手动：`npm run dashboard`、`npm run radar`。
 
+想在手机上收提醒：`npm run setup` 里配置 Telegram 机器人（约 2 分钟），见 [docs/telegram.md](docs/telegram.md)。机器人只读，只回应你自己的聊天。
+
 想完全无人值守（不开对话窗口）：在 `config/config.json` 打开 `agent`，雷达发现线索后会自动调用你指定的 AI 命令行处理。先读 [docs/agents.md](docs/agents.md)。
 
 ## 花钱规则
@@ -89,9 +93,10 @@ src/radar/                               推特雷达 + 两个数据源
 src/cli/                                 mint（安全铸造）、screen（合约筛查）、pow（工作量证明）、log（日志）、doctor（自检）
 src/lib/rules.mjs                        花钱规则与预演检查（test/ 里有单元测试，npm test）
 src/server/                              本地只读看板
+src/telegram/                            Telegram 机器人（推送 + 只读查询）
 scripts/                                 setup、service（后台托管）、check（发布前隐私检查）
 data/  logs/                             你的台账、日志（不进 git）
-docs/                                    数据源、市场适配、AI 工具、安全模型
+docs/                                    数据源、市场适配、AI 工具、Telegram、安全模型
 ```
 
 ## 常见问题

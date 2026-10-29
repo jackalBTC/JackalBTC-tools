@@ -29,7 +29,7 @@ const RULES = [
   ['地址或哈希', /0x[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?(?![0-9a-fA-F])/g, m => !PUBLIC.has(m.toLowerCase()) && !/^0x(.)\1+$/i.test(m)],
   ['本机路径', /(\/Users\/[A-Za-z0-9._-]+|\/home\/[A-Za-z0-9._-]+|\/Volumes\/[^\s'"`)]+|[A-Z]:\\Users\\[^\s'"`]+)/g, () => true],
   ['邮箱', /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/g, m => !/@(example\.(com|org)|noreply\.|users\.noreply\.github\.com)/.test(m) && !/@[\d.]+$/.test(m) && !/^[^@]+@\d/.test(m)],
-  ['疑似密钥', /\b(new1_[0-9a-f]{20,}|xai-[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{30,}|[0-9a-fA-F]{64})\b/g, m => !PUBLIC.has('0x' + m.toLowerCase())],
+  ['疑似密钥', /\b(new1_[0-9a-f]{20,}|xai-[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{30,}|\d{8,11}:[A-Za-z0-9_-]{35}|[0-9a-fA-F]{64})\b/g, m => !PUBLIC.has('0x' + m.toLowerCase())],
   ['疑似助记词', /\b(?:[a-z]{3,8}\s+){11,23}[a-z]{3,8}\b/g, m => { const w = m.split(/\s+/); return w.length >= 12 && w.every(x => /^[a-z]+$/.test(x)) && new Set(w).size >= 10 && !/\b(the|and|of|to|is|in|for|with|that|this|you|are|it|on|as|be|or|by|if|not|from|your)\b/.test(m); }],
 ];
 

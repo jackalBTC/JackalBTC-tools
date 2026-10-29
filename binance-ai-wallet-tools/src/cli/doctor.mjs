@@ -45,6 +45,11 @@ if (p === 'twitterapi') getSecret('twitterapi') ? ok('数据源 twitterapi.io，
 else if (p === 'grok') getSecret('xai') ? ok(`数据源 Grok（${config.radar.grokModel}），Key 已配置`) : fail('数据源 Grok，但没有 Key（npm run setup 或环境变量 XAI_API_KEY）');
 else fail(`未知数据源 ${p}`);
 
+console.log('\nTelegram（可选）');
+if (!getSecret('telegram')) ok('未配置（不影响使用；想要手机提醒见 docs/telegram.md）');
+else if (!(config.telegram?.chatIds || []).length) warn('有机器人 token，但还没绑定聊天：重新运行 npm run setup');
+else ok(`已配置，绑定 ${config.telegram.chatIds.length} 个聊天`);
+
 console.log('\n数据');
 fs.mkdirSync(DATA, { recursive: true });
 ok(`数据目录 ${DATA.replace(ROOT, '.')}`);

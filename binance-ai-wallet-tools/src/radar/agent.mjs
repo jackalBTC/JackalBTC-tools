@@ -45,7 +45,7 @@ function pump(log) {
   fs.appendFileSync(out, `\n===== ${new Date().toISOString()} ${c.key} ${c.tweet}\n`);
   log('AGENT', `交给 ${cmd} 处理 ${c.key}`);
   // 不把推特 / xAI 的 Key 传给 AI 进程：它用不到，万一被推文注入也拿不走
-  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(TWITTERAPI_KEY|XAI_API_KEY)$/.test(k)));
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(TWITTERAPI_KEY|XAI_API_KEY|TELEGRAM_BOT_TOKEN)$/.test(k)));
   execFile(cmd, args, { cwd: ROOT, timeout: (A.timeoutMinutes ?? 15) * 60_000, maxBuffer: 16 << 20, env }, (err, stdout, stderr) => {
     fs.appendFileSync(out, String(stdout || '') + (stderr ? '\n[stderr]\n' + stderr : '') + (err ? `\n[退出] ${err.code ?? err.signal ?? err.message}\n` : '\n'));
     log(err ? 'ERR agent' : 'AGENT', `${c.key} 处理${err ? '失败：' + String(err.message).slice(0, 120) : '完成'}（详情 logs/${path.basename(out)}）`);

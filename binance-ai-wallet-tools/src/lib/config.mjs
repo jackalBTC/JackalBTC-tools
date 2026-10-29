@@ -33,6 +33,8 @@ function validate(cfg) {
   if (!(cfg.radar?.intervalMinutes >= 5)) errs.push('radar.intervalMinutes 至少 5');
   if (!Array.isArray(cfg.radar?.queries)) errs.push('radar.queries 必须是数组');
   if (cfg.agent && typeof cfg.agent.enabled !== 'boolean') errs.push('agent.enabled 必须是 true 或 false');
+  if (cfg.telegram && (!Array.isArray(cfg.telegram.chatIds) || cfg.telegram.chatIds.some(x => !/^-?\d+$/.test(String(x))))) errs.push('telegram.chatIds 必须是数字 id 的数组');
+  if (cfg.telegram?.notify && !Array.isArray(cfg.telegram.notify)) errs.push('telegram.notify 必须是数组');
   if (cfg.agent?.enabled && (!Array.isArray(cfg.agent.command) || !cfg.agent.command.length || !cfg.agent.command.some(x => String(x).includes('{prompt}')))) errs.push('agent.command 必须是数组，并且包含 {prompt}');
   if (cfg.dashboard?.host && !['127.0.0.1', 'localhost', '::1'].includes(cfg.dashboard.host)) errs.push('dashboard.host 只能是本机地址（127.0.0.1 / localhost）');
   if (errs.length) { console.error('config/config.json 有错：\n  - ' + errs.join('\n  - ')); process.exit(78); }
@@ -67,8 +69,8 @@ export function tailLines(file, n) {
   try { return fs.readFileSync(path.isAbsolute(file) ? file : dataFile(file), 'utf8').trim().split('\n').filter(Boolean).slice(-n); } catch { return []; }
 }
 
-// 密钥：name = 'twitterapi' | 'xai'
-const ENV = { twitterapi: 'TWITTERAPI_KEY', xai: 'XAI_API_KEY' };
+// 密钥：name = 'twitterapi' | 'xai' | 'telegram'
+const ENV = { twitterapi: 'TWITTERAPI_KEY', xai: 'XAI_API_KEY', telegram: 'TELEGRAM_BOT_TOKEN' };
 export function getSecret(name) {
   if (process.env[ENV[name]]) return process.env[ENV[name]].trim();
   try { return String(JSON.parse(fs.readFileSync(SECRETS_FILE, 'utf8'))[name] || '').trim() || null; } catch { return null; }

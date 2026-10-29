@@ -8,6 +8,7 @@ A "launch hunting" toolkit that runs on your own computer. It works with the **B
 - **AI verification** – reads contract source code, cross-checks the official website and X account, simulates calls, and sorts each project into *mint now / ask me / skip*.
 - **Guarded minting** – one command reads the price, applies your spending rules, uses Binance's own transaction preview as a gate, then executes.
 - **Local dashboard** – holdings and floor prices, projects waiting for your decision, radar leads, updates from official accounts of projects you joined, a review page and a full action log.
+- **Telegram bot (optional)** – pushes new leads, successful mints, pending decisions, low BNB and wallet disconnects to your phone; you can query status but it can't place orders.
 
 > ⚠️ This is an automation tool, not financial advice. "Free" NFTs still cost gas and most never get a market. Read [docs/security.md](docs/security.md) first.
 
@@ -30,6 +31,7 @@ A "launch hunting" toolkit that runs on your own computer. It works with the **B
 | [Node.js](https://nodejs.org) 20+ | |
 | AI coding agent (optional) | [Claude Code](https://claude.com/claude-code), OpenAI Codex or any tool that reads `AGENTS.md`; the toolkit also works by hand |
 | **AI Wallet** in the Binance app | Claim a `.ai` Agent ID, turn on **Developer Mode**, and keep a little BNB for gas |
+| Telegram bot (optional) | For phone alerts – create one with @BotFather, see [docs/telegram.md](docs/telegram.md) |
 | X data source key (pick one) | [twitterapi.io](https://twitterapi.io) or [xAI Grok API](https://console.x.ai) – sign-up steps in [docs/providers.md](docs/providers.md) |
 
 ## Install in three steps
@@ -63,6 +65,8 @@ Claude follows the radar log: free projects that pass verification are minted au
 
 Prefer not to run in the background? Run them by hand: `npm run dashboard`, `npm run radar`.
 
+Alerts on your phone: set up the Telegram bot in `npm run setup` (about 2 minutes), see [docs/telegram.md](docs/telegram.md) (Chinese). The bot is read-only and only answers your own chat.
+
 Fully unattended (no chat window open): enable `agent` in `config/config.json`; the radar then calls the AI command line you specify for each lead. Read [docs/agents.md](docs/agents.md) first.
 
 ## Spending rules
@@ -89,9 +93,10 @@ src/radar/                               X radar + two data sources
 src/cli/                                 mint (guarded minting), screen (contract check), pow (proof of work), log, doctor
 src/lib/rules.mjs                        spending rules and preview checks (unit tests in test/, npm test)
 src/server/                              local read-only dashboard
+src/telegram/                            Telegram bot (alerts + read-only queries)
 scripts/                                 setup, service (background), check (pre-publish privacy scan)
 data/  logs/                             your ledger and logs (not committed)
-docs/                                    data sources, markets, agents, security model
+docs/                                    data sources, markets, agents, Telegram, security model
 ```
 
 ## FAQ

@@ -13,11 +13,14 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LOGS = path.join(ROOT, 'logs');
 const NODE = process.execPath;
+const cmd = process.argv[2] || 'status';
 const JOBS = [
   { name: 'radar', script: 'src/radar/radar.mjs', log: 'radar.log' },
   { name: 'dashboard', script: 'src/server/server.mjs', log: 'dashboard.log' },
 ];
-const cmd = process.argv[2] || 'status';
+// 配置了 Telegram 机器人 token 才托管机器人
+const hasTelegram = !!process.env.TELEGRAM_BOT_TOKEN || (() => { try { return !!JSON.parse(fs.readFileSync(path.join(os.homedir(), '.config/binance-ai-wallet-tools/secrets.json'), 'utf8')).telegram; } catch { return false; } })();
+if (hasTelegram || cmd === 'uninstall') JOBS.push({ name: 'telegram', script: 'src/telegram/bot.mjs', log: 'telegram.log' });
 const xml = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const run = (c, a) => { try { execFileSync(c, a, { stdio: 'pipe' }); return { ok: true }; } catch (e) { return { ok: false, msg: (String(e.stderr || '') + String(e.stdout || '')).trim() || e.message }; } };
 const sh = (c, a) => { try { return execFileSync(c, a, { stdio: 'pipe' }).toString(); } catch (e) { return String(e.stdout || '') + String(e.stderr || ''); } };

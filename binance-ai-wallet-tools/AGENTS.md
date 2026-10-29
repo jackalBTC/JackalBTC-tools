@@ -22,6 +22,7 @@
 | 写日志 | `node src/cli/log.mjs <项目id> <步骤> "<内容>" [--tx] [--contract] [--source] [--value]` |
 | 雷达跑一轮 | `npm run radar:once` |
 | 后台服务状态 | `npm run service status` |
+| Telegram 机器人（推送 + 只读查询） | `npm run telegram`（见 docs/telegram.md） |
 
 ## 盯雷达
 雷达日志在 `logs/radar.log`。每行开头：`CANDIDATE` 新线索、`HOT` 多人在传、`UPDATE` 已参与项目的官推新帖、`ERR` 出错（`ERR LOWBNB` 是 BNB 不足）、`AGENT` 自动调用 AI 的记录。

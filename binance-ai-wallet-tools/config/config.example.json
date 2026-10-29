@@ -27,6 +27,15 @@
 
   "alerts": { "lowBnb": 0.03 },
 
+  "telegram": {
+    "_说明": "可选：Telegram 机器人推送提醒 + 只读查询（/status /pending /today /radar）。token 不写这里，npm run setup 会帮你绑定。见 docs/telegram.md",
+    "chatIds": [],
+    "radarLog": "",
+    "_radarLog": "留空 = logs/radar.log；雷达日志在别处时填路径",
+    "notify": ["CANDIDATE", "HOT", "MINT", "PENDING", "ABORT", "LOWBNB", "NOTCONNECTED", "DEVMODE", "ERR"],
+    "_notify": "要推送哪些：CANDIDATE 新线索 / HOT 多人在传 / UPDATE 官推动态 / MINT 铸造成功 / PENDING 等你决定 / ABORT 中止 / LOWBNB / NOTCONNECTED / DEVMODE / ERR"
+  },
+
   "agent": {
     "_说明": "可选：雷达发现线索后自动调用 AI 命令行处理（不开对话窗口也能全自动）。默认关。打开前读 docs/agents.md。",
     "enabled": false,
