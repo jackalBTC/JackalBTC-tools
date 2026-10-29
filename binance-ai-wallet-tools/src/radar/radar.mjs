@@ -63,6 +63,7 @@ function score(t, ex) {
 function known() {
   const ca = new Set(), site = new Set();
   for (const p of readJson('projects.json', [])) {
+    if (['观察中', '待确认'].includes(p.status)) continue;   // 还在等开放 / 等用户决定的项目，再出现要照常提醒
     for (const v of Object.values(p.contracts || {})) if (/^0x[0-9a-fA-F]{40}$/.test(v)) ca.add(v.toLowerCase());
     const h = p.site && hostOf(p.site); if (h) site.add(h);
   }
