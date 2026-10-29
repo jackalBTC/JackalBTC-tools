@@ -19,6 +19,7 @@
   - [8. Telegram 机器人](#8-telegram-机器人)
   - [9. 无人值守模式 agent](#9-无人值守模式-agent)
   - [10. 安装向导、自检、后台托管、隐私检查](#10-安装向导自检后台托管隐私检查)
+  - [11. 多钱包](#11-多钱包)
 - [安全设计](#安全设计)
 - [安装与上手](#安装与上手)
 - [配置说明](#配置说明)
@@ -120,7 +121,7 @@
 - **参考资料**（`references/`）：按铸造机制选核验路径、证据和费用判断、雷达去重规则。
 
 ### 3. 安全铸造 mint
-`src/cli/mint.mjs` · `node src/cli/mint.mjs <项目id> <合约> <数量> [--fn "mint(uint256)"] [--args "{qty}"] [--free-only] [--dry]`
+`src/cli/mint.mjs` · `node src/cli/mint.mjs <项目id> <合约> <数量> [--fn "mint(uint256)"] [--args "{qty}"] [--wallet <钱包id>] [--free-only] [--dry]`
 
 一个命令走完整个流程，任何一步不过就停下，并写日志说明原因：
 
@@ -220,9 +221,37 @@
 | `npm run doctor` | 自检：Node、依赖、baw、钱包登录、开发者模式、BNB、配置、推特 Key、Telegram |
 | `npm run service install / status / uninstall` | 后台托管雷达、看板、Telegram 机器人，崩了自动重启（macOS 用 launchd；其他系统给出 pm2 命令） |
 | `npm run check` | 发布前隐私检查：扫出钱包地址、交易哈希、本机路径、邮箱、疑似密钥和助记词 |
-| `npm test` | 26 个单元测试：花钱规则、预演检查、报价识别、Telegram 消息格式 |
+| `npm test` | 39 个单元测试：花钱规则、预演检查、报价识别、Telegram 消息格式、多钱包 |
 
 另外：仓库里的 GitHub Actions 会在每次提交时，自动跑语法检查、单元测试和隐私检查。
+
+### 11. 多钱包
+`src/lib/wallets.mjs` · `npm run wallet` · `npm run mint-all`（可选；不配置就是原来的单钱包，什么都不用改）
+
+想用几个 AI 钱包一起打免费项目时用。钱包列表在 `data/wallets.json`：
+
+```json
+[
+  { "id": "main", "label": "主钱包", "address": "0x…", "main": true },
+  { "id": "w2", "label": "二号", "address": "0x…", "bawDir": "~/.config/binance-ai-wallet-tools/wallets/w2", "allowPaid": false }
+]
+```
+
+| 命令 | 做什么 |
+|---|---|
+| `npm run wallet add <id>` | 扫码登录一个钱包并写进 `wallets.json`（打印登录链接和配对码，在币安 App 里核对后确认）。第一个加的是主钱包，之后加的都是副钱包 |
+| `npm run wallet login <id>` | 副钱包会话过期 / 掉线时重新扫码（登录后的地址必须和记录的一致） |
+| `npm run wallet list` / `status` | 列出钱包；逐个看是否登录、会话是不是它、开发者模式到期时间、BNB |
+| `npm run mint-all -- <项目id> <合约> <数量> [--fn …] [--args …]` | 先主钱包、再依次换副钱包，每个钱包都走完整的 mint 检查；钱包之间随机等 20–60 秒。`--skip-main` 跳过主钱包、`--only w2,w3` 只打这几个、`--paid-all` 让设了 `allowPaid` 的副钱包也按规则付费、`--dry` 只算计划 |
+
+**为什么副钱包的登录要单独存？** `baw` 把登录会话存在系统钥匙串里，名字是固定的，第二个钱包一登录就会把第一个顶掉。所以主钱包照常用钥匙串；副钱包运行 `baw` 时带上 `BINANCE_BAW_DIR=<它自己的目录>`，并用一个小钩子（`src/lib/keytar-off.mjs`）让 baw 读不到钥匙串，baw 就会退回它自带的备用方式：把会话存在该目录的 `session.json`。
+- **安全上的取舍**：副钱包的会话是一个普通文件（目录权限 700、文件 600，只有你自己的账户能读），没有钥匙串那层保护。能读你用户目录的程序就能用这个会话操作副钱包（仍受币安 AI 钱包本身的每日额度和开发者模式限制）。副钱包里只放打免费所需的少量 BNB。
+- **副钱包默认只打免费**：`mint.mjs --wallet <副钱包>` 自动加 `--free-only`；只有在 `wallets.json` 里给它设了 `"allowPaid": true` 才可能按花钱规则付费（用 `mint-all` 时还要加 `--paid-all`）。每个合约的付费张数上限按钱包分别算，每天的付费金额上限是所有钱包合计。
+- **每一步都核对会话**：开始、预演前、执行前各检查一次「baw 当前登录的就是这个钱包的地址」，对不上就停。
+- **主钱包没打成**：如果只是它自己没有免费张 / 付费到上限 / 已领过，副钱包继续；预演不过、合约有问题等其他原因，整批停下。
+- **女巫风险**：很多项目会把「同一个资金来源打款的钱包」认成同一个人，取消空投或资格。多钱包不能绕开项目规则，请自己判断；给副钱包充 gas 的方式也会把它们关联起来。
+
+看板顶部会出现钱包切换（2 个以上才显示）：单个钱包或「全部钱包」合计（同一个合约的张数、市值、成本相加）。副钱包的持仓清单在 `data/wallets/<id>/watch.json`。雷达每轮也会检查副钱包（掉线、开发者模式、BNB 不足，同一问题 2 小时内只报一次，消息开头带 `[钱包id]`）。Telegram 的 `/status` 每个钱包一段，`/today` 按钱包分组。
 
 ## 安全设计
 
@@ -299,10 +328,11 @@ claude                     # 在本目录打开 Claude Code（或 codex）
 | 文件 | 内容 |
 |---|---|
 | `projects.json` | 项目台账：评级、状态、官网官推、合约、项目卡、后续结果 |
+| `wallets.json` | 多钱包列表（可选，见[多钱包](#11-多钱包)）；副钱包的持仓在 `wallets/<id>/watch.json` |
 | `watch.json` | 持仓：`collections`（NFT 系列：合约、持有编号、成本、市场配置，mint 会自动维护）和 `tokens`（代币：`{ id, name, symbol, contract, cost: { BNB 或 USDT } }`，花钱换到的币由 AI 加进来） |
-| `realized.json` | 已实现盈亏：每次卖出记一条 `{ ts, project, name, cost: {…}, proceeds: {…}, tx? }`，看板的盈亏台账按它算 |
+| `realized.json` | 已实现盈亏：每次卖出记一条 `{ ts, project, name, cost: {…}, proceeds: {…}, tx? }`，看板的盈亏台账按它算；副钱包的记录加 `wallet` |
 | `events.jsonl` | 每一步操作日志（只追加） |
-| `spend.jsonl` | 花费账本（每日 / 每项目上限按它算） |
+| `spend.jsonl` | 花费账本（每日 / 每项目上限按它算；多钱包时每条带 `wallet`） |
 | `news.json` | 已参与项目的中文动态总结 |
 | `watch-accounts.json` | 跟踪的官推 |
 | `fingerprints.json` | 合约接口指纹（识别批量模板） |

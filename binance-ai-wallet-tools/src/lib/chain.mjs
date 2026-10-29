@@ -115,8 +115,9 @@ export async function agentIdOf(wallet) {
 }
 
 // ---------- baw ----------
-export function baw(args, timeout = 60000) {
-  return new Promise(res => execFile('baw', [...args, '--json'], { timeout, maxBuffer: 8 << 20 }, (e, out) => {
+// env：用哪个钱包的登录会话（见 src/lib/wallets.mjs 的 envFor）；不传 = 当前环境（主钱包）
+export function baw(args, env = null, timeout = 60000) {
+  return new Promise(res => execFile('baw', [...args, '--json'], { timeout, maxBuffer: 8 << 20, ...(env ? { env } : {}) }, (e, out) => {
     try { res(JSON.parse(out)); } catch { res({ success: false, error: { message: String(e?.code === 'ENOENT' ? '没找到 baw 命令，请先安装币安 AI 钱包 CLI' : (e?.message || out)).slice(0, 200) } }); }
   }));
 }

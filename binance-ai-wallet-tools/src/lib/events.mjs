@@ -11,12 +11,13 @@ export function logEvent(project, step, detail, opt = {}) {
   if (!detail || !String(detail).trim()) throw new Error('内容不能为空');
   if (opt.tx && !/^0x[0-9a-fA-F]{64}$/.test(opt.tx)) throw new Error('txHash 格式不对，要完整 0x + 64 位');
   if (opt.contract && !/^0x[0-9a-fA-F]{40}$/.test(opt.contract)) throw new Error('合约地址格式不对');
+  if (opt.wallet && !/^[a-z0-9][a-z0-9_-]{0,40}$/i.test(opt.wallet)) throw new Error('钱包 id 格式不对');
   if (step === 'execute' && !opt.tx) throw new Error('execute 必须带完整 txHash');
   const all = [detail, ...Object.values(opt)].join(' ');
   if (SECRETISH.test(all)) throw new Error('疑似包含敏感信息，拒绝写入');
   const line = { ts: new Date().toISOString(), project: project.toLowerCase(), action: step, detail: String(detail).trim(),
     ...(opt.tx ? { txHash: opt.tx } : {}), ...(opt.contract ? { contract: opt.contract } : {}),
-    ...(opt.source ? { source: opt.source } : {}), ...(opt.value ? { value: opt.value } : {}) };
+    ...(opt.source ? { source: opt.source } : {}), ...(opt.value ? { value: opt.value } : {}), ...(opt.wallet ? { wallet: opt.wallet } : {}) };   // wallet：多钱包时是哪个钱包
   fs.mkdirSync(DATA, { recursive: true });
   fs.appendFileSync(dataFile('events.jsonl'), JSON.stringify(line) + '\n');
   return line;

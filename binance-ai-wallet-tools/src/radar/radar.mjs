@@ -6,7 +6,8 @@
 // 日志行的开头：CANDIDATE 新线索 / HOT 多人在传 / UPDATE 已参与项目的官推新帖 / ROUND 每轮汇总 / ERR 出错（含 ERR LOWBNB 余额不足）
 import fs from 'node:fs';
 import { config, dataFile, readJson, writeJson, DATA } from '../lib/config.mjs';
-import { rpc, walletAddress, baw } from '../lib/chain.mjs';
+import { rpc, baw } from '../lib/chain.mjs';
+import { readWallets, listWallets, envFor, sessionOk } from '../lib/wallets.mjs';
 import { sameCodeAs } from '../lib/clones.mjs';
 import * as twitterapi from './providers/twitterapi.mjs';
 import * as grok from './providers/grok.mjs';
@@ -75,18 +76,41 @@ function known() {
 // 每轮顺便检查钱包：掉线、开发者模式关闭或快到期、BNB 不足。掉线时 mint 会失败，必须让人知道。
 async function checkWallet(st) {
   try {
-    const s = await baw(['wallet', 'status']);
+    const main = (await listWallets()).find(w => w.main), env = envFor(main);
+    const s = await baw(['wallet', 'status'], env);
     if (s?.data?.status !== 'CONNECTED') { log('ERR NOTCONNECTED', `AI 钱包未登录（${s?.data?.status || s?.error?.message || '未知'}），运行 baw auth signin 扫码`); return; }
-    const dm = (await baw(['wallet', 'settings']))?.data?.devMode;
+    const dm = (await baw(['wallet', 'settings'], env))?.data?.devMode;
     if (dm && !dm.enabled) log('ERR DEVMODE', '开发者模式已关闭，合约调用会失败：币安 App → AI 钱包 → 设置 → 开发者模式');
     else if (dm?.expiresAt) {
       const left = (Date.parse(dm.expiresAt) - Date.now()) / 3600_000;
       if (left < 48 && (!st.devWarnAt || Date.now() - st.devWarnAt > 6 * 3600_000)) { log('ERR DEVMODE', `开发者模式 ${left < 0 ? '已经' : '将在 ' + left.toFixed(0) + ' 小时后'}到期（${dm.expiresAt}），到期后请在 App 里重新打开`); st.devWarnAt = Date.now(); }
     }
-    const w = await walletAddress();
-    const bnb = Number(BigInt(await rpc('eth_getBalance', [w, 'latest']))) / 1e18;
+    const bnb = Number(BigInt(await rpc('eth_getBalance', [main.address, 'latest']))) / 1e18;
     if (bnb < config.alerts.lowBnb) log('ERR LOWBNB', `钱包 BNB 只剩 ${bnb.toFixed(4)}，低于提醒线 ${config.alerts.lowBnb}`);
   } catch {}
+}
+
+// 副钱包（data/wallets.json）：同样检查掉线 / 会话被顶掉、开发者模式、BNB 不足。同一钱包同一类问题 2 小时内只报一次，免得刷屏
+async function checkOtherWallets(st) {
+  st.walletWarn ||= {};
+  const warn = (id, kind, msg) => { const k = `${id}|${kind}`; if (Date.now() - (st.walletWarn[k] || 0) < 2 * 3600_000) return; st.walletWarn[k] = Date.now(); log(kind === 'ERR' ? 'ERR' : 'ERR ' + kind, `[${id}] ${msg}`); };
+  let L;
+  try { L = readWallets().filter(w => !w.main); } catch (e) { warn('wallets', 'ERR', e.message.replace(/\n\s*/g, ' ')); return; }
+  for (const w of L) {
+    try {
+      const env = envFor(w), e = await sessionOk(w);
+      if (e) { warn(w.id, 'NOTCONNECTED', `${e}。运行 npm run wallet login ${w.id} 重新扫码`); continue; }
+      const dm = (await baw(['wallet', 'settings'], env))?.data?.devMode;
+      if (dm && !dm.enabled) warn(w.id, 'DEVMODE', '开发者模式已关闭，这个钱包的合约调用会失败');
+      else if (dm?.expiresAt) {
+        const left = (Date.parse(dm.expiresAt) - Date.now()) / 3600_000;
+        if (left < 48) warn(w.id, 'DEVMODE', `开发者模式${left < 0 ? '已经' : '将在 ' + left.toFixed(0) + ' 小时后'}到期（${dm.expiresAt}）`);
+      }
+      const bnb = Number(BigInt(await rpc('eth_getBalance', [w.address, 'latest']))) / 1e18;
+      if (bnb < config.alerts.lowBnb) warn(w.id, 'LOWBNB', `BNB 只剩 ${bnb.toFixed(4)}，低于提醒线 ${config.alerts.lowBnb}`);
+    } catch {}
+  }
+  for (const [k, t] of Object.entries(st.walletWarn)) if (Date.now() - t > 7 * 86400_000) delete st.walletWarn[k];
 }
 
 async function cycle() {
@@ -96,6 +120,7 @@ async function cycle() {
   const kn = known();
   const firstRun = !st.lastRun;   // 第一次运行会扫到过去几小时的存量线索，只记录、不交给 AI，避免一上来就批量处理
   await checkWallet(st);
+  await checkOtherWallets(st);
   let found = 0, req = 0, got = 0;
 
   const jobs = R.queries.map(q => ({ ...q, alwaysReport: false }));

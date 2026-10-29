@@ -95,13 +95,14 @@ node src/cli/log.mjs <项目id> <步骤> "<做了什么、结果是什么>" [--t
 
 ### 2.1 统一用 `mint.mjs`
 ```bash
-node src/cli/mint.mjs <项目id> <合约> <数量> [--fn "mint(uint256)"] [--args "{qty}"] [--free-only] [--dry]
+node src/cli/mint.mjs <项目id> <合约> <数量> [--fn "mint(uint256)"] [--args "{qty}"] [--wallet <钱包id>] [--free-only] [--dry]
 ```
 - 先在 `data/projects.json` 建好项目条目（**写上 site / x**，否则按「无官网 / 官推」处理）。
 - 它会：读报价 → 按 `config/config.json` 的 `spending` 规则裁掉不该付的部分 → baw 预演把关 → 执行 → 等回执 → 写日志 → 把 tokenId 写进 `data/watch.json`。
 - 先用 `--dry` 看计划。数量填你想打的张数（≤ 50）：超出「每个合约累计付费张数」或「当天付费金额」上限时，脚本会自动减少付费张数；单价超限、未开自动付费、源码未验证、没有官源时，付费部分整体不打，只拿免费张。
 - 同一时间只能跑一个 mint（有锁），多个项目请一个个来，不要并行。
-- 参数只认 `--fn` `--args` `--dry` `--free-only`，拼错会直接报错，不会被忽略。
+- 参数只认 `--fn` `--args` `--wallet` `--dry` `--free-only`，拼错会直接报错，不会被忽略。
+- 多钱包（`data/wallets.json`）：不写 `--wallet` = 主钱包。用户明确要求多个钱包一起打时用 `npm run mint-all -- <同样的参数>`（先主后副，副钱包只拿免费，钱包之间自动间隔）；用户没说就只用主钱包。
 - `--args` 可用占位符：`{qty}` 数量、`{wallet}` 本钱包、`{agentId}` 本钱包的 Agent ID 编号（从注册表算出并核对归属）、`{zero}` 零地址；其余只能是整数或 0x 地址。例：`--fn "mint(uint256,uint256)" --args "{qty},{agentId}"`。
 - 免费张数用 value=0 模拟判断；付费报价优先按合约 ABI（返回值名字像 wei / cost / price）读，读不到再猜常见函数名或「单价 × 张数」，最后都要按报价再模拟一次，对不上就不打。
 - **批量模板**：和已知合约对外函数完全相同的项目（小号连发的同一模板），付费部分一律不打，只拿免费张。指纹存在 `data/fingerprints.json`。

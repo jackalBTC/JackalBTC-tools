@@ -17,6 +17,8 @@
     "telegram": "node src/telegram/bot.mjs",
     "service": "node scripts/service.mjs",
     "check": "node scripts/check.mjs",
+    "wallet": "node scripts/wallet.mjs",
+    "mint-all": "node src/cli/mint-all.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {

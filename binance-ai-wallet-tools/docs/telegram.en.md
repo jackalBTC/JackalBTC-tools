@@ -20,6 +20,8 @@ Get alerts and check status on your phone even when the AI chat window on your c
 
 **Commands** (read-only): `/status` wallet and balance, `/pending` projects waiting for you, `/today` today's mints, `/news` latest updates from joined projects, `/radar` recent leads, `/settings` alert settings.
 
+**Multiple wallets** (when `data/wallets.json` is configured): `/status` shows one block per wallet (sign-in state, BNB, Developer Mode); `/today` groups by wallet; mint messages name the wallet ("铸造成功：project（钱包 w2）"); signed-out / Developer Mode / low-BNB alerts for secondary wallets start with `[wallet-id]` and are sent at most once every 2 hours per problem.
+
 ## What it won't do
 - **It can't place orders, spend money or change settings.** To mint or skip, tell your AI agent (Claude Code etc.). Even if the bot token or your Telegram account leaks, nobody can touch the wallet through it.
 - **It only answers chats you paired.** Anyone else who finds your bot gets no reply at all.

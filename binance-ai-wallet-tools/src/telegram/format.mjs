@@ -31,7 +31,7 @@ export function costLine(cost) {
 // 操作日志一条 → 消息（只推铸造成功、出简报 / 待确认、中止）。cost 可选：铸造成功时附上花费
 export function formatEvent(e, cost) {
   if (!e || typeof e !== 'object') return null;
-  const p = oneLine(e.project), d = clip(oneLine(e.detail), 400);
+  const p = oneLine(e.project) + (e.wallet ? `（钱包 ${oneLine(e.wallet)}）` : ''), d = clip(oneLine(e.detail), 400);   // 多钱包时注明是哪个钱包
   const tx = /^0x[0-9a-fA-F]{64}$/.test(e.txHash || '') ? `\nhttps://bscscan.com/tx/${e.txHash}` : '';
   if (e.action === 'confirm' && /status=0x1/.test(e.detail || '')) { const c = costLine(cost); return { kind: 'MINT', text: `✅ 铸造成功：${p}\n${d}${c ? '\n' + c : ''}${tx}` }; }
   if (e.action === 'brief') return { kind: 'PENDING', text: `🤔 等你决定：${p}\n${d}\n（在看板「待你确认」或对 AI 说「打 / 不打」）` };
@@ -56,14 +56,16 @@ export function newsList(news, projects = [], n = 5) {
 
 export const KIND_LABEL = { NEWS: '项目动态', CANDIDATE: '新线索', HOT: '多人在传', UPDATE: '官推动态', MINT: '铸造成功', PENDING: '等你决定', ABORT: '中止', LOWBNB: 'BNB 不足', NOTCONNECTED: '钱包掉线', DEVMODE: '开发者模式', ERR: '雷达出错' };
 
-// 「今天」的铸造汇总
-export function todaySummary(events, now = new Date()) {
+// 「今天」的铸造汇总：笔数 + 项目数；多钱包（事件带 wallet 字段，没有的算主钱包）时按钱包分组
+export function todaySummary(events, now = new Date(), mainLabel = '主钱包') {
   const day = now.toDateString();
   const ok = events.filter(e => e.action === 'confirm' && /status=0x1/.test(e.detail || '') && new Date(e.ts).toDateString() === day);
-  const by = {};
-  for (const e of ok) by[e.project] = (by[e.project] || 0) + 1;
-  const lines = Object.entries(by).map(([p, n]) => `· ${oneLine(p)} ×${n}`);
-  return `📅 今天成功铸造 ${ok.length} 笔、${lines.length} 个项目${lines.length ? '\n' + lines.join('\n') : ''}`;
+  const count = list => { const by = {}; for (const e of list) by[e.project] = (by[e.project] || 0) + 1; return Object.entries(by).map(([p, n]) => `· ${oneLine(p)} ×${n}`); };
+  const lines = count(ok), head = `📅 今天成功铸造 ${ok.length} 笔、${lines.length} 个项目`;
+  const groups = new Map();
+  for (const e of ok) { const w = e.wallet ? oneLine(e.wallet) : mainLabel; groups.set(w, [...(groups.get(w) || []), e]); }
+  if (groups.size < 2) return head + (lines.length ? '\n' + lines.join('\n') : '');
+  return `${head}（${groups.size} 个钱包）` + [...groups].map(([w, list]) => { const l = count(list); return `\n\n【${w}】${list.length} 笔、${l.length} 个项目\n${l.join('\n')}`; }).join('');
 }
 
 export function pendingList(projects) {

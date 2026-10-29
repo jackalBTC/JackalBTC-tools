@@ -90,11 +90,12 @@ Whatever you configure, automatic payment also requires "verified contract sourc
 .claude/skills/binance-ai-wallet-tools/  rules for the AI (anti-injection, per-step log, 3-way decision, mint flow)
 config/config.example.json               config template (setup creates config/config.json, not committed)
 src/radar/                               X radar + two data sources
-src/cli/                                 mint (guarded minting), screen (contract check), pow (proof of work), log, doctor
+src/cli/                                 mint (guarded minting), mint-all (mint with each wallet in turn), screen (contract check), pow (proof of work), log, doctor
 src/lib/rules.mjs                        spending rules and preview checks (unit tests in test/, npm test)
 src/server/                              local read-only dashboard
 src/telegram/                            Telegram bot (alerts + read-only queries)
-scripts/                                 setup, service (background), check (pre-publish privacy scan)
+src/lib/wallets.mjs                      multiple wallets (data/wallets.json, optional; see "Multiple wallets" in the top-level README)
+scripts/                                 setup, service (background), check (pre-publish privacy scan), wallet (manage wallets)
 data/  logs/                             your ledger and logs (not committed)
 docs/                                    data sources, markets, agents, Telegram (zh / en), security model
 ```

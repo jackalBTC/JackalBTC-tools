@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // 本地只读看板。只监听本机（默认 127.0.0.1:8790），只处理 GET；不签名、不发交易、不读写钱包凭证。
+// 多钱包（data/wallets.json）：余额 / 持仓 / NFT / 盈亏 / 复盘接口带 ?w=<钱包 id> 看单个钱包，?w=all 看全部合计，不带 = 主钱包。
 // 用法: node src/server/server.mjs
 import http from 'node:http';
 import fs from 'node:fs';
@@ -9,14 +10,16 @@ import dns from 'node:dns/promises';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { config, readJson, writeJson, tailLines, ROOT } from '../lib/config.mjs';
-import { batch, sel, word, big, addrOf, decodeStr, rpc, baw, walletAddress } from '../lib/chain.mjs';
+import { batch, sel, word, big, addrOf, decodeStr, rpc, baw } from '../lib/chain.mjs';
 import { readEvents } from '../lib/events.mjs';
+import { listWallets, envFor, readWatch } from '../lib/wallets.mjs';
 import { ADAPTERS } from './markets/index.mjs';
+import { mergePositions, mergeOverview, mergeNfts, mergeOutcomes } from './merge.mjs';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const PUB = path.join(DIR, 'public');
 const { host: HOST, port: PORT } = config.dashboard;
-const watch = () => readJson('watch.json', { collections: [] });
+const skey = (k, w) => w.main ? k : `${k}-${w.id}`;   // 快照名：主钱包沿用原来的名字
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json' };
 
 // ---------- 缓存 ----------
@@ -47,11 +50,11 @@ function snapshot(key, fn, every) {
 }
 
 // ---------- 钱包总览 ----------
-async function overview() {
-  const [status, bal] = await Promise.all([baw(['wallet', 'status']), baw(['wallet', 'balance', '--binanceChainId', String(config.chainId)])]);
-  const wallet = await walletAddress().catch(() => null);
+async function overview(w) {
+  const env = envFor(w);
+  const [status, bal] = await Promise.all([baw(['wallet', 'status'], env), baw(['wallet', 'balance', '--binanceChainId', String(config.chainId)], env)]);
   const tokens = (bal.data || []).map(t => ({ symbol: t.symbol, address: t.address, balance: +t.balance, price: +t.price, value: +t.value }));
-  return { wallet, status: status.data?.status || status.error?.message || 'UNKNOWN', tokens, tokensError: bal.success ? null : bal.error?.message,
+  return { wallet: w.address, walletId: w.id, label: w.label || w.id, status: status.data?.status || status.error?.message || 'UNKNOWN', tokens, tokensError: bal.success ? null : bal.error?.message,
     lowBnb: config.alerts.lowBnb, minBnbForTx: config.spending.minBnbForTx, at: Date.now() };
 }
 
@@ -95,8 +98,8 @@ async function nftMeta(col, id) {
     return { rarity: str(rarity), traits: Object.fromEntries(Object.entries(attrs).slice(0, 3).map(([k, v]) => [String(k).slice(0, 30), str(v)])), image };
   });
 }
-async function nfts() {
-  const cols = watch().collections || [], me = (await walletAddress()).toLowerCase();
+async function nfts(w) {
+  const cols = readWatch(w).collections || [], me = w.address.toLowerCase();
   const res = await batch(cols.flatMap(c => (c.ids || []).map(id => [c.contract, '0x' + sel('ownerOf(uint256)') + word(id)])));
   let k = 0; const out = [];
   for (const c of cols) {
@@ -119,10 +122,10 @@ async function supplyOf(c) {
     return { minted: await tryNum(['totalSupply()', 'totalMinted()']), max: c.maxSupply || await tryNum(['MAX_SUPPLY()', 'maxSupply()', 'MAX_MINTABLE()', 'MAX_TOKENS()', 'collectionSize()']) };
   }).catch(() => ({ minted: null, max: null }));
 }
-async function positions() {
-  const cols = watch().collections || [], W = await walletAddress();
+async function positions(w) {
+  const wl = readWatch(w), cols = wl.collections || [], W = w.address;
   const bals = await batch(cols.map(c => [c.contract, '0x' + sel('balanceOf(address)') + word(W)]));
-  const owned = Object.fromEntries((snaps.get('nfts')?.v || await nfts()).collections.map(c => [c.id, c.items.filter(i => i.owned)]));
+  const owned = Object.fromEntries((snaps.get(skey('nfts', w))?.v || await nfts(w)).collections.map(c => [c.id, c.items.filter(i => i.owned)]));
   const list = [];
   for (const [i, c] of cols.entries()) {
     const mk = await marketOf(c), items = owned[c.id] || [], heldByRarity = {};
@@ -137,7 +140,7 @@ async function positions() {
       ...mk, heldByRarity, value, supply: await supplyOf(c) });
   }
   // 打到的代币（watch.json 的 tokens）：链上读余额，DexScreener 有交易池就算开盘（取流动性最大的池子报价）
-  for (const t of watch().tokens || []) {
+  for (const t of wl.tokens || []) {
     const [b, d] = await batch([[t.contract, '0x' + sel('balanceOf(address)') + word(W)], [t.contract, '0x' + sel('decimals()')]]);
     const held = Number(big(b)) / 10 ** (Number(big(d)) || 18);
     const mk = await cached('dex:' + t.contract, 600e3, async () => {
@@ -154,12 +157,13 @@ async function positions() {
 
 // ---------- 复盘：开没开市场、地板价、链上整包授权（疑似开了市场） ----------
 const APPROVAL_ALL = '0x17307eab39ab6107e8899845ad3d59bd9653f200a220920489ca2b5937696c31';
-async function outcomes() {
+// 按钱包复盘：用这个钱包的持仓清单和持仓快照；授权事件的扫描进度按合约共用
+async function outcomes(w) {
   const st = readJson('outcomes-state.json', {});
   const head = Number(await rpc('eth_blockNumber', []));
-  const pos = snaps.get('pos')?.v?.positions || [], projects = readJson('projects.json', []);
+  const pos = snaps.get(skey('pos', w))?.v?.positions || [], projects = readJson('projects.json', []);
   const out = [], R = config.rpc.logsMaxRange;
-  for (const c of watch().collections || []) {
+  for (const c of readWatch(w).collections || []) {
     const s = st[c.contract.toLowerCase()] ||= { from: head - R, ops: {} };
     if (!c.market || c.market.type === 'none') {
       try {
@@ -191,6 +195,17 @@ async function radar() {
     intervalMinutes: config.radar.intervalMinutes, total: cands.length, recent, lines: tailLines(RADAR_LOG, 6), at: Date.now() };
 }
 
+// ---------- 多钱包 ----------
+const PER_WALLET = new Set(['/api/wallets', '/api/overview', '/api/nfts', '/api/realized', '/api/positions', '/api/outcomes']);
+const ov = w => cached('ov-' + w.id, 30e3, () => overview(w));
+// 持仓清单（主钱包 data/watch.json，副钱包 data/wallets/<id>/watch.json）一改就立刻刷新持仓
+const watched = new Set();
+function watchWallet(w) {
+  if (watched.has(w.watchFile)) return;
+  watched.add(w.watchFile);
+  fs.watchFile(w.watchFile, { interval: 3000 }, () => { snaps.get(skey('nfts', w))?.kick(); snaps.get(skey('pos', w))?.kick(); });
+}
+
 // ---------- HTTP ----------
 http.createServer(async (req, res) => {
   const okHost = [`127.0.0.1:${PORT}`, `localhost:${PORT}`, `[::1]:${PORT}`];
@@ -199,12 +214,43 @@ http.createServer(async (req, res) => {
   const json = (v, code = 200) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(v)); };
   try {
     if (req.method !== 'GET') return json({ error: '只读看板，不接受写操作' }, 405);
+    if (PER_WALLET.has(url.pathname)) {
+      const WS = await listWallets();   // wallets.json 写错会在这里报错，不悄悄回退
+      for (const w of WS) watchWallet(w);   // 后来新加的钱包也能「改了持仓立刻刷新」
+      if (url.pathname === '/api/wallets') return json(WS.map(w => ({ id: w.id, label: w.label || w.id, address: w.address, main: w.main, allowPaid: !!w.allowPaid, agentId: w.agentId || null })));   // 不暴露会话目录、环境变量、文件路径
+      const q = url.searchParams.get('w'), ALL = q === 'all', main = WS.find(w => w.main);
+      const w = !q ? main : WS.find(x => x.id.toLowerCase() === q.toLowerCase());
+      if (!ALL && !w) return json({ error: '没有这个钱包：' + q }, 400);
+      const each = (fn, empty) => Promise.all(WS.map(x => fn(x).catch(e => ({ ...empty, error: String(e.message || e) })).then(v => ({ w: x, v }))));   // 某个钱包出错不拖垮合计
+      const warn = rs => rs.filter(r => r.v?.error).map(r => `${r.w.id}：${r.v.error}`);
+      switch (url.pathname) {
+        case '/api/overview': {
+          if (!ALL) return json(await ov(w));
+          const rs = await each(ov, { tokens: [] });
+          return json(mergeOverview(rs.map(({ w, v }) => v.error ? { walletId: w.id, status: v.error, tokens: [] } : v)));
+        }
+        case '/api/nfts': {
+          if (!ALL) return json(await snapshot(skey('nfts', w), () => nfts(w), 5 * 60e3));
+          const rs = await each(x => snapshot(skey('nfts', x), () => nfts(x), 5 * 60e3), { collections: [] });
+          return json({ collections: mergeNfts(rs.map(r => r.v.collections)), warnings: warn(rs), at: Date.now() });
+        }
+        case '/api/realized': {   // realized.json 每条可带 wallet 字段，没有的算主钱包
+          const L = readJson('realized.json', []);
+          return json({ list: ALL ? L : L.filter(r => String(r.wallet || main.id).toLowerCase() === w.id.toLowerCase()) });
+        }
+        case '/api/positions': {
+          if (!ALL) return json(await snapshot(skey('pos', w), () => positions(w), 5 * 60e3));
+          const rs = await each(x => snapshot(skey('pos', x), () => positions(x), 5 * 60e3), { positions: [] });
+          return json({ positions: mergePositions(rs.map(r => r.v.positions)), warnings: warn(rs), at: Date.now() });
+        }
+        case '/api/outcomes': {
+          if (!ALL) return json(await snapshot(skey('out', w), () => outcomes(w), 30 * 60e3));
+          const rs = await each(x => snapshot(skey('out', x), () => outcomes(x), 30 * 60e3), { list: [] });
+          return json({ list: mergeOutcomes(rs.map(r => r.v.list)), warnings: warn(rs), at: Date.now() });
+        }
+      }
+    }
     switch (url.pathname) {
-      case '/api/overview': return json(await cached('ov', 30e3, overview));
-      case '/api/nfts': return json(await snapshot('nfts', nfts, 5 * 60e3));
-      case '/api/realized': return json({ list: readJson('realized.json', []) });
-      case '/api/positions': return json(await snapshot('pos', positions, 5 * 60e3));
-      case '/api/outcomes': return json(await snapshot('out', outcomes, 30 * 60e3));
       case '/api/radar': return json(await cached('radar', 15e3, radar));
       case '/api/events': return json(readEvents(300).reverse());
       case '/api/today': {   // 今天的到手笔数：读完整日志，不受列表条数限制
@@ -229,10 +275,11 @@ http.createServer(async (req, res) => {
     res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' });
     fs.createReadStream(file).pipe(res);
   } catch (e) { json({ error: String(e.message || e) }, 502); }
-}).listen(PORT, HOST, () => {
+}).listen(PORT, HOST, async () => {
   console.log(`看板已启动：http://${HOST}:${PORT}`);
-  snapshot('nfts', nfts, 5 * 60e3); snapshot('pos', positions, 5 * 60e3);
-  // watch.json（持仓清单）一改就立刻刷新持仓，不用等 5 分钟的定时
-  fs.watchFile(path.join(config.dataDir, 'watch.json'), { interval: 3000 }, () => { snaps.get('nfts')?.kick(); snaps.get('pos')?.kick(); });
-  setTimeout(() => snapshot('out', outcomes, 30 * 60e3), 90e3);
+  let WS = [];
+  try { WS = await listWallets(); } catch (e) { console.error(e.message); }
+  // 每个钱包都在后台刷新；持仓清单一改就立刻重算，不用等 5 分钟的定时
+  for (const w of WS) { snapshot(skey('nfts', w), () => nfts(w), 5 * 60e3); snapshot(skey('pos', w), () => positions(w), 5 * 60e3); watchWallet(w); }
+  setTimeout(async () => { for (const w of WS) await snapshot(skey('out', w), () => outcomes(w), 30 * 60e3).catch(() => {}); }, 90e3);   // 一个个来，复盘扫描进度是共用的
 });

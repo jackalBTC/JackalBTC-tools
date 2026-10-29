@@ -66,3 +66,7 @@ test('铸造成功：付费的写付了多少 + gas，免费的写 gas', () => {
   assert.equal(costLine(null), '');
   assert.doesNotMatch(formatEvent({ action: 'confirm', project: 'p', detail: 'status=0x1' }).text, /💰/);
 });
+
+test('多钱包：铸造消息注明是哪个钱包', () => {
+  assert.match(formatEvent({ action: 'confirm', project: 'p', detail: 'status=0x1', wallet: 'w2' }).text, /铸造成功：p（钱包 w2）/);
+});

@@ -19,6 +19,7 @@
   - [8. Telegram bot](#8-telegram-bot)
   - [9. Unattended mode – agent](#9-unattended-mode--agent)
   - [10. Setup wizard, self-check, background service, privacy check](#10-setup-wizard-self-check-background-service-privacy-check)
+  - [11. Multiple wallets](#11-multiple-wallets)
 - [Security design](#security-design)
 - [Install and get started](#install-and-get-started)
 - [Configuration](#configuration)
@@ -121,7 +122,7 @@ This is the AI's operating manual – it decides how the AI thinks and acts:
 - **References** (`references/`): verification paths by mint mechanism, evidence and fee judgement, radar de-duplication rules.
 
 ### 3. Guarded minting – mint
-`src/cli/mint.mjs` · `node src/cli/mint.mjs <project-id> <contract> <qty> [--fn "mint(uint256)"] [--args "{qty}"] [--free-only] [--dry]`
+`src/cli/mint.mjs` · `node src/cli/mint.mjs <project-id> <contract> <qty> [--fn "mint(uint256)"] [--args "{qty}"] [--wallet <wallet-id>] [--free-only] [--dry]`
 
 One command runs the whole flow; any failed step stops it and logs why:
 
@@ -221,9 +222,37 @@ Technical notes:
 | `npm run doctor` | Self-check: Node, dependencies, baw, wallet sign-in, Developer Mode, BNB, config, X key, Telegram |
 | `npm run service install / status / uninstall` | Runs the radar, dashboard and Telegram bot in the background with auto-restart (launchd on macOS; pm2 commands elsewhere) |
 | `npm run check` | Pre-publish privacy scan: wallet addresses, transaction hashes, local paths, emails, key-like strings and seed phrases |
-| `npm test` | 26 unit tests: spending rules, preview gate, quote detection, Telegram message formatting |
+| `npm test` | 39 unit tests: spending rules, preview gate, quote detection, Telegram message formatting, multiple wallets |
 
 The repository's GitHub Actions also run the syntax check, unit tests and privacy scan on every commit.
+
+### 11. Multiple wallets
+`src/lib/wallets.mjs` · `npm run wallet` · `npm run mint-all` (optional; without it you have the usual single wallet and nothing changes)
+
+For minting free projects with several AI wallets. The wallet list lives in `data/wallets.json`:
+
+```json
+[
+  { "id": "main", "label": "Main", "address": "0x…", "main": true },
+  { "id": "w2", "label": "Second", "address": "0x…", "bawDir": "~/.config/binance-ai-wallet-tools/wallets/w2", "allowPaid": false }
+]
+```
+
+| Command | What it does |
+|---|---|
+| `npm run wallet add <id>` | Sign a wallet in and add it to `wallets.json` (prints the login link and pairing code; check the code in the Binance app and confirm). The first wallet you add becomes the main wallet, later ones are secondary |
+| `npm run wallet login <id>` | Sign a secondary wallet in again when its session expires (the address after login must match the recorded one) |
+| `npm run wallet list` / `status` | List wallets; for each, whether it is signed in, whether the session really belongs to it, developer-mode expiry and BNB |
+| `npm run mint-all -- <project-id> <contract> <qty> [--fn …] [--args …]` | Main wallet first, then each secondary wallet, every one going through the full mint checks, with a random 20–60 s pause between wallets. `--skip-main` skips the main wallet, `--only w2,w3` limits the run, `--paid-all` lets secondaries that have `allowPaid` pay under the rules, `--dry` only plans |
+
+**Why secondary sessions are stored separately.** `baw` keeps its login session in the system keychain under a fixed name, so signing a second wallet in overwrites the first. The main wallet keeps using the keychain; secondary wallets run `baw` with `BINANCE_BAW_DIR=<their own directory>` plus a small hook (`src/lib/keytar-off.mjs`) that hides the keychain from baw, so baw falls back to its built-in alternative: a `session.json` file in that directory.
+- **Security trade-off:** a secondary session is a plain file (directory 700, file 600, readable only by your user account) without the keychain's protection. Any program that can read your home directory could use that session to act on the secondary wallet (still bounded by the AI wallet's own daily limit and developer mode). Keep only the little BNB needed for free mints in secondary wallets.
+- **Secondary wallets are free-only by default:** `mint.mjs --wallet <secondary>` adds `--free-only` automatically; a secondary can only pay under the spending rules when `wallets.json` gives it `"allowPaid": true` (and, with `mint-all`, when you also pass `--paid-all`). The per-contract paid cap is counted per wallet; the daily BNB cap is the total across all wallets.
+- **The session is checked at every step:** at start, before preview and before execute, the tool confirms that baw is signed in as this wallet's address, and stops otherwise.
+- **If the main wallet fails:** when it merely has no free mints left / reached its paid cap / already claimed, the secondaries continue; for any other reason (preview failed, contract problem) the whole batch stops.
+- **Sybil caveat:** many projects treat wallets funded from the same source as one person and cancel their airdrop or eligibility. Multiple wallets don't get around a project's rules — judge for yourself; topping up secondary wallets' gas from one place also links them.
+
+The dashboard header gets a wallet switcher (shown only with 2+ wallets): one wallet or "all wallets" combined (held count, value and cost summed per contract). A secondary wallet's holdings list is `data/wallets/<id>/watch.json`. The radar also checks secondary wallets every round (signed out, developer mode, low BNB; the same problem is reported at most once every 2 hours, prefixed with `[wallet-id]`). In Telegram, `/status` shows one block per wallet and `/today` groups by wallet.
 
 ## Security design
 
@@ -300,10 +329,11 @@ All in `data/`, yours only, never committed:
 | File | Contents |
 |---|---|
 | `projects.json` | Project ledger: rating, status, official site and account, contracts, project card, outcome |
+| `wallets.json` | Multiple-wallet list (optional, see [Multiple wallets](#11-multiple-wallets)); a secondary wallet's holdings are in `wallets/<id>/watch.json` |
 | `watch.json` | Holdings: `collections` (NFTs: contracts, token ids, cost, market config, maintained by mint) and `tokens` (`{ id, name, symbol, contract, cost: { BNB or USDT } }`, added by the AI when it buys a token) |
-| `realized.json` | Realized P&L: one entry per sale `{ ts, project, name, cost: {…}, proceeds: {…}, tx? }`; the dashboard's P&L card is computed from it |
+| `realized.json` | Realized P&L: one entry per sale `{ ts, project, name, cost: {…}, proceeds: {…}, tx? }`; the dashboard's P&L card is computed from it; add `wallet` for a secondary wallet's sales |
 | `events.jsonl` | Every logged step (append-only) |
-| `spend.jsonl` | Spending ledger (daily and per-project caps are computed from it) |
+| `spend.jsonl` | Spending ledger (daily and per-project caps are computed from it; with multiple wallets each entry has `wallet`) |
 | `news.json` | Chinese update summaries for joined projects |
 | `watch-accounts.json` | Followed official accounts |
 | `fingerprints.json` | Contract interface fingerprints (template detection) |

@@ -9,7 +9,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { config, getSecret, readJson, writeJson, ROOT, dataFile } from '../lib/config.mjs';
-import { baw, rpc, walletAddress, bnbUsd } from '../lib/chain.mjs';
+import { baw, rpc, bnbUsd } from '../lib/chain.mjs';
+import { listWallets, readWallets, envFor, sessionOk } from '../lib/wallets.mjs';
 import { readEvents } from '../lib/events.mjs';
 import { parseRadarLine, formatEvent, todaySummary, pendingList, formatNews, newsList, newsId, KIND_LABEL, clip, oneLine } from './format.mjs';
 
@@ -107,19 +108,27 @@ const HELP = [
   '',
   '我不能下单或花钱；要打 / 不打，请在 Claude Code 等 AI 助手里说。',
 ].join('\n');
-async function status() {
-  const s = await baw(['wallet', 'status']);
-  const lines = [`🔐 钱包：${s?.data?.status === 'CONNECTED' ? '已登录' : '未登录（' + (s?.data?.status || '未知') + '）'}`];
+// 一个钱包一段：登录状态（会话是不是它）、BNB、开发者模式
+async function walletBlock(w, multi) {
+  const env = envFor(w), e = await sessionOk(w).catch(x => x.message);
+  const lines = multi ? [`【${oneLine(w.label && w.label !== w.id ? `${w.id}（${w.label}）` : w.id)}${w.main ? ' · 主' : w.allowPaid ? ' · 允许付费' : ' · 只打免费'}】`] : [];
+  lines.push(`🔐 钱包：${e ? '未登录 / 会话不对（' + clip(oneLine(e), 80) + '）' : '已登录'}`);
   try {
-    const w = await walletAddress();
-    const bnb = Number(BigInt(await rpc('eth_getBalance', [w, 'latest']))) / 1e18;
+    const bnb = Number(BigInt(await rpc('eth_getBalance', [w.address, 'latest']))) / 1e18;
     lines.push(`⛽ BNB：${bnb.toFixed(4)}${bnb < config.alerts.lowBnb ? '（偏低，请补 gas）' : ''}`);
   } catch {}
-  const dm = (await baw(['wallet', 'settings']))?.data?.devMode;
+  const dm = e ? null : (await baw(['wallet', 'settings'], env))?.data?.devMode;
   if (dm) lines.push(`🛠 开发者模式：${dm.enabled ? '开' : '关'}${dm.expiresAt ? '，到期 ' + dm.expiresAt : ''}`);
+  return lines.join('\n');
+}
+async function status() {
+  let WS, lines;
+  try { WS = await listWallets(); lines = [(await Promise.all(WS.map(w => walletBlock(w, WS.length > 1)))).join('\n\n')]; }
+  catch (e) { lines = ['⚠️ ' + clip(oneLine(e.message), 300)]; WS = []; }
+  if (WS.length > 1) lines.push('');
   const rs = readJson('radar-state.json', {});
   lines.push(`📡 雷达上一轮：${rs.lastRun ? new Date(rs.lastRun).toLocaleString('zh-CN', { hour12: false }) : '还没跑过'}（数据源 ${config.radar.provider}）`);
-  lines.push(`💸 自动付费：${config.spending.allowAutoPaid ? `开（每天 ≤ ${config.spending.maxDailyBnb} BNB）` : '关（只打免费）'}`);
+  lines.push(`💸 自动付费：${config.spending.allowAutoPaid ? `开（每天 ≤ ${config.spending.maxDailyBnb} BNB）` : '关（只打免费）'}${WS.length > 1 ? '；副钱包只打免费（设了 allowPaid 的除外）' : ''}`);
   return lines.join('\n');
 }
 function recentRadar() {
@@ -136,7 +145,7 @@ async function handle(msg) {
   let reply;
   if (cmd === '/status') reply = await status();
   else if (cmd === '/pending') reply = pendingList(readJson('projects.json', []));
-  else if (cmd === '/today') reply = todaySummary(readEvents(5000));
+  else if (cmd === '/today') { let main = '主钱包'; try { main = readWallets().find(w => w.main).id; } catch {} reply = todaySummary(readEvents(5000), new Date(), main); }
   else if (cmd === '/radar') reply = recentRadar();
   else if (cmd === '/news') reply = newsList(readJson('news.json', []), readJson('projects.json', []));
   else if (cmd === '/settings') reply = '🔔 会推送：' + [...notifyKinds].map(k => KIND_LABEL[k] || k).join('、') + `\n项目动态推送等级：${[...newsLevels].join('、')}` + '\n改 config/config.json 的 telegram.notify / newsLevels 后重启机器人生效。';

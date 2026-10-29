@@ -34,6 +34,15 @@ if (bawOk) {
   }
 }
 
+if (bawOk) {   // 多钱包（data/wallets.json，可选）：逐个核对副钱包会话
+  const { readWallets, sessionOk, multiWallet } = await import('../lib/wallets.mjs');
+  if (multiWallet()) {
+    let L = null;
+    try { L = readWallets(); ok(`多钱包：${L.length} 个（主钱包 ${L.find(w => w.main).id}）`); } catch (e) { fail(e.message); }
+    for (const w of (L || []).filter(w => !w.main)) { const e = await sessionOk(w); e ? fail(`副钱包 ${w.id}：${e}（npm run wallet login ${w.id}）`) : ok(`副钱包 ${w.id} 已登录 ${mask(w.address)}`); }
+  }
+}
+
 console.log('\n配置');
 fs.existsSync(CONFIG_FILE) ? ok('config/config.json 存在') : warn('还没有 config/config.json，正在使用默认值（运行 npm run setup 生成）');
 const sp = config.spending;

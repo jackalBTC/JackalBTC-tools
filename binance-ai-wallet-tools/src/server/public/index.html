@@ -39,6 +39,7 @@ nav .in{max-width:none;margin:0;padding:0 28px;height:70px;display:flex;align-it
 .brand i{font-size:25px;color:var(--accent)}
 .chip{display:inline-flex;align-items:center;gap:10px;height:38px;padding:0 14px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:14px;color:var(--text-2);white-space:nowrap}
 .chip b{color:var(--text);font-weight:600}
+.wsel select{border:0;background:transparent;color:var(--text);font:inherit;font-weight:600;outline:none;cursor:pointer;max-width:160px}
 .state{display:inline-flex;align-items:center;gap:6px;font-size:13px}
 .state.ok{color:var(--good)} .state.off{color:var(--bad)}
 .spacer{flex:1}
@@ -290,6 +291,7 @@ table.rev .warn{color:var(--warn,#d98a00)} table.rev .ok{color:var(--good,#1a9a5
 <body>
 <nav><div class="in">
   <div class="brand"><i class="ph-fill ph-crosshair-simple"></i>链上打新台 <span class="muted" style="font-weight:400">币安 AI 钱包工具</span></div>
+  <label class="chip wsel" title="切换钱包" style="display:none"><i class="ph ph-users-three"></i><select id="walletSel" aria-label="切换钱包"></select></label>
   <div class="chip hide-sm" id="walletChip"><i class="ph ph-wallet"></i><span class="sk" style="width:200px;height:12px"></span></div>
   <div class="spacer"></div>
   <span class="muted hide-sm" id="updated">读取中</span>
@@ -414,14 +416,26 @@ const PALETTE = ['var(--accent)', '#8a9099', '#5d636b', '#3f444b', '#2c3036'];
 const xUrl = h => { const n = (String(h || '').replace(/^@/, '').match(/^[A-Za-z0-9_]{1,15}/) || [])[0]; return n ? 'https://x.com/' + n : '#'; };
 let BNB_USD = null, PROJECTS = [], OVT = new Set(), REAL = null;
 function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1600); }
-async function get(u) { const r = await fetch(u); const j = await r.json(); if (!r.ok || j.error) throw new Error(j.error || r.status); return j; }
+// 多钱包（data/wallets.json 里有 2 个以上才显示切换）：余额、持仓、收藏、盈亏、复盘按顶部选的钱包取（all = 全部合计）
+let WSEL = ''; try { WSEL = localStorage.getItem('lh-wallet') || ''; } catch {}
+const withW = u => WSEL && /^\/api\/(overview|positions|nfts|realized|outcomes)\b/.test(u) ? u + (u.includes('?') ? '&' : '?') + 'w=' + encodeURIComponent(WSEL) : u;
+async function loadWallets() {
+  try {
+    const L = await get('/api/wallets'), box = $('#walletSel').closest('label');
+    if (L.length < 2) { box.style.display = 'none'; WSEL = ''; return; }
+    $('#walletSel').innerHTML = `<option value="all">全部钱包（${L.length}）</option>` + L.map(w => `<option value="${esc(w.id)}">${esc(w.label || w.id)}${w.main ? '（主）' : ''}</option>`).join('');
+    if (!WSEL || ![...$('#walletSel').options].some(o => o.value === WSEL)) WSEL = (L.find(w => w.main) || L[0]).id;
+    $('#walletSel').value = WSEL; box.style.display = '';
+  } catch { WSEL = ''; }
+}
+async function get(u) { u = withW(u); const r = await fetch(u); const j = await r.json(); if (!r.ok || j.error) throw new Error(j.error || r.status); return j; }
 const ts = t => new Date(t).toLocaleString('zh-CN', { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
 
 async function loadOverview() {
   try {
     const o = await get('/api/overview');
     const ok = o.status === 'CONNECTED';
-    $('#walletChip').innerHTML = `<i class="ph ph-wallet"></i>${o.wallet ? `<a class="addr num" href="${scan(o.wallet)}" target="_blank"><span>${short(o.wallet)}</span></a>` : '<span class="muted">未读到地址</span>'}
+    $('#walletChip').innerHTML = `<i class="ph ph-wallet"></i>${o.wallet ? `<a class="addr num" href="${scan(o.wallet)}" target="_blank"><span>${short(o.wallet)}</span></a>` : o.walletId === 'all' ? `<span>${esc(o.label)}合计</span>` : '<span class="muted">未读到地址</span>'}
       <span class="state ${ok ? 'ok' : 'off'}"><i class="ph-fill ${ok ? 'ph-check-circle' : 'ph-warning-circle'}"></i>${ok ? '已连接' : esc(o.status)}</span>`;
     const isKnown = t => t.symbol === 'BNB' || (t.price > 0 && t.value >= 0.01);
     const known = o.tokens.filter(isKnown).sort((a, b) => b.value - a.value), junk = o.tokens.filter(t => !isKnown(t));
@@ -764,7 +778,12 @@ async function all() {
   b.classList.remove('spin');
 }
 $('#refresh').onclick = () => all().then(() => toast('已刷新'));
-renderNfts(); all();
+$('#walletSel').addEventListener('change', e => {
+  WSEL = e.target.value; try { localStorage.setItem('lh-wallet', WSEL); } catch {}
+  POSD = null; REAL = null; NFT = null; KP.tokens = null; KP.nft = null; $('#positions').innerHTML = '';
+  all().then(() => toast('已切换到 ' + e.target.selectedOptions[0].textContent));
+});
+renderNfts(); loadWallets().then(all);
 setInterval(loadOverview, 60000);
 setInterval(() => { loadProjects(); loadEvents(); loadRadar(); loadNews(); }, 30000);
 setInterval(loadPositions, 60000);
