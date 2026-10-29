@@ -127,7 +127,9 @@ async function cycle() {
         }
         const ex = extract(t);
         if (ex.cas.length > (R.maxCasPerTweet ?? 3)) continue;          // 一帖列一堆合约的清单 / 二手帖：丢弃
+        const hadKnown = ex.cas.some(c => kn.ca.has(c));
         ex.cas = ex.cas.filter(c => !kn.ca.has(c));
+        if (hadKnown && !ex.cas.length) continue;   // 合约都是已参与项目的：晒单 / 推广帖，附带的个人页域名也不算新线索
         ex.domains = ex.domains.filter(d => !kn.site.has(d));
         if (!ex.domains.length && !ex.cas.length) continue;
         const sc = score(t, ex);
