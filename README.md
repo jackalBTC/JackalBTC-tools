@@ -1,6 +1,6 @@
 # 币安 AI 钱包工具（binance-ai-wallet-tools）
 
-[English](README.en.md) · JackalBTC 的工具库
+[English](README.en.md) · JackalBTC 的工具库 · 当前版本 **v0.3.0** · [更新日志](CHANGELOG.md)
 
 > ⚠️ 和链上资产有关，**不构成投资建议**。默认只打免费的；使用前请先读[使用前请先知道](#使用前请先知道)和[安全设计](#安全设计)。
 

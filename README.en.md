@@ -1,6 +1,6 @@
 # Binance AI Wallet Tools (binance-ai-wallet-tools)
 
-[中文](README.md) · JackalBTC Tools
+[中文](README.md) · JackalBTC Tools · current version **v0.3.0** · [Changelog](CHANGELOG.en.md)
 
 > ⚠️ Deals with on-chain assets – **not financial advice**. Free mints only by default; read [Before you start](#before-you-start) and [Security design](#security-design) first.
 

@@ -42,3 +42,6 @@
 
 ## 第一次帮用户配置时要问的
 - **每日花费上限**：工具默认**不设**每天自动付费的总上限（`config.spending.maxDailyBnb` 为 `null`），只按单张价格和每个项目的张数限制。第一次帮用户配置、或用户开启自动付费（`allowAutoPaid`）时，**主动问一句**：「要不要设一个每天最多花多少 BNB 的上限？（多个钱包合计）」——用户给了数字就写进 `config/config.json` 的 `spending.maxDailyBnb`，说不要就保持 `null`。不要自己替用户决定。
+
+## 改了代码要记更新日志
+给这个仓库提交功能或修复时，同时更新仓库根目录的 `CHANGELOG.md` 和 `CHANGELOG.en.md`（最新的写在最上面，用普通用户看得懂的话写「新增 / 改进 / 修复 / 安全」），需要时把 `package.json` 的 version 和 README 顶部的「当前版本」一起改，发版后打 `vX.Y.Z` 标签。
