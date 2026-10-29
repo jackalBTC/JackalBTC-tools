@@ -1,18 +1,8 @@
-# JackalBTC Tools
-
-[中文](README.md)
-
-Tools I use myself and share. Each tool lives in its own folder; full documentation is below.
-
-| Tool | In one line | Folder |
-|---|---|---|
-| **Binance AI Wallet Tools** | Watches X for new Binance Agent ID ecosystem projects, verifies contracts, mints safely within your rules, with a local dashboard and Telegram alerts | [`binance-ai-wallet-tools/`](binance-ai-wallet-tools/) |
-
-> ⚠️ These tools touch on-chain assets and are **not financial advice**. By default they only do free actions; anything that costs money must be enabled by you with caps. Read "Security design" and "Before you start" on this page first; use at your own risk.
-
----
-
 # Binance AI Wallet Tools (binance-ai-wallet-tools)
+
+[中文](README.md) · JackalBTC Tools
+
+> ⚠️ Deals with on-chain assets – **not financial advice**. Free mints only by default; read [Before you start](#before-you-start) and [Security design](#security-design) first.
 
 ## Contents
 - [What it does for you](#what-it-does-for-you)
