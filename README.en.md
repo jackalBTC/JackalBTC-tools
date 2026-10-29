@@ -4,7 +4,18 @@
 
 > ⚠️ Deals with on-chain assets – **not financial advice**. Free mints only by default; read [Before you start](#before-you-start) and [Security design](#security-design) first.
 
+## What's new
+
+| Version | Date | Changes |
+|---|---|---|
+| **v0.3.0 Multiple wallets** | 2026-10-30 | Several Binance AI wallets signed in at once and a project minted wallet by wallet automatically (`npm run wallet add`, `npm run mint-all`); dashboard wallet switcher and per-wallet review; radar and Telegram per wallet; secondary wallets free-only by default; the daily spending cap is now optional and off by default (the AI asks whether you want one) |
+| **v0.2.0 P&L and token holdings** | 2026-10-29 | Dashboard P&L card (realized + unrealized); tokens you paid for appear under holdings with price and P&L once trading opens; Telegram mint messages show amount paid and gas; dashboard refreshes on change; radar filters show-off posts and referral-code spam |
+| **v0.1.0 First release** | 2026-10-29 | X radar, unified minting with preview checks, local dashboard, optional Telegram bot, rules for AI agents, Chinese and English docs |
+
+Full notes: [Changelog](CHANGELOG.en.md) and [Releases](https://github.com/jackalBTC/JackalBTC-tools/releases). Upgrade: `git pull` → `cd binance-ai-wallet-tools && npm install` → `npm run service install`.
+
 ## Contents
+- [What's new](#whats-new)
 - [What it does for you](#what-it-does-for-you)
 - [Before you start](#before-you-start)
 - [How it works](#how-it-works)
