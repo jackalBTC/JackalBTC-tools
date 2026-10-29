@@ -1,0 +1,63 @@
+{
+  "_说明": "复制为 config/config.json 后再改（npm run setup 会自动生成）。不要在这里写任何 API Key——Key 放在 ~/.config/binance-ai-wallet-tools/secrets.json 或环境变量里。",
+
+  "wallet": "",
+  "_wallet": "留空即可：启动时自动用 baw wallet address 读取当前登录的 AI 钱包 BSC 地址。",
+
+  "chainId": 56,
+  "rpc": {
+    "call": "https://bsc-dataseed.bnbchain.org",
+    "logs": "https://bsc-rpc.publicnode.com",
+    "logsMaxRange": 49000
+  },
+
+  "dashboard": { "host": "127.0.0.1", "port": 8790 },
+
+  "spending": {
+    "_说明": "花钱规则。安全原则（预演不过不执行、不签 Permit、不授权代币）写死在代码里，不能在这里关掉。",
+    "allowAutoPaid": false,
+    "_allowAutoPaid": "false = 只打免费张；true = 允许按下面的上限自动付费（仍要求源码已验证 + 台账里有官网或官推）",
+    "maxUnitUsd": 3,
+    "maxPaidPerProject": 10,
+    "maxDailyBnb": 0.02,
+    "gasLikeBnb": 0.0005,
+    "_gasLikeBnb": "一次铸造付费合计不超过这个数时，视同 gas，不受单价 / 张数上限（但仍受 allowAutoPaid 和验证要求约束）",
+    "minBnbForTx": 0.003
+  },
+
+  "alerts": { "lowBnb": 0.03 },
+
+  "agent": {
+    "_说明": "可选：雷达发现线索后自动调用 AI 命令行处理（不开对话窗口也能全自动）。默认关。打开前读 docs/agents.md。",
+    "enabled": false,
+    "command": ["claude", "-p", "{prompt}"],
+    "_command": "命令和参数数组，{prompt} 会替换成任务说明。其他工具的写法见 docs/agents.md",
+    "kinds": ["new", "hot"],
+    "_kinds": "哪些线索交给 AI：new 新线索 / hot 多人在传 / update 已参与项目的官推新帖",
+    "maxPerHour": 6,
+    "timeoutMinutes": 15
+  },
+
+  "radar": {
+    "provider": "twitterapi",
+    "_provider": "twitterapi = twitterapi.io（按条计费，结果稳定）；grok = xAI Grok API 的 x_search 工具（按调用计费，结果由模型整理）。见 docs/providers.md",
+    "intervalMinutes": 20,
+    "overlapMinutes": 10,
+    "pagesPerQuery": 2,
+    "grokModel": "grok-4-1-fast",
+    "hotAuthors": 3,
+    "hotWindowMinutes": 120,
+    "maxCasPerTweet": 3,
+    "watchChunk": 8,
+    "_watchChunk": "已参与项目的官推每几个一组查询（最多 10）。每条 queries 也可以单独写 pages（翻几页）",
+    "queries": [
+      { "id": "agentid", "q": "(\"Agent ID\" OR \"AgentID\" OR \"Agentic Wallet\") (mint OR claim OR free OR launch) -is:retweet" },
+      { "id": "agentid-zh", "q": "(\"Agent ID\" OR 币安AI钱包 OR \"Agentic Wallet\") (铸造 OR 免费 OR 领取 OR mint) -is:retweet" },
+      { "id": "free-mint-bsc", "q": "(\"free mint\" OR freemint) (BSC OR \"BNB Chain\") (agent OR \".ai\") -is:retweet" }
+    ],
+    "watchAccounts": [],
+    "_watchAccounts": "已参与项目的官方账号（不带 @），雷达会把它们的新帖记为「官推动态」。Claude 打完一个有官推的项目后会自动加进来。",
+    "ignoreDomains": ["x.com", "twitter.com", "t.co", "binance.com", "github.com", "youtube.com", "youtu.be", "t.me", "discord.gg", "bscscan.com", "dexscreener.com", "gmgn.ai", "four.meme", "pancakeswap.finance"],
+    "ignoreCas": ["0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F", "0x55d398326f99059fF775485246999027B3197955", "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"]
+  }
+}

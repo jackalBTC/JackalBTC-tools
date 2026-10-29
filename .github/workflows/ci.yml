@@ -1,0 +1,27 @@
+name: binance-ai-wallet-tools
+on:
+  push:
+    paths: ['binance-ai-wallet-tools/**', '.github/workflows/ci.yml']
+  pull_request:
+    paths: ['binance-ai-wallet-tools/**', '.github/workflows/ci.yml']
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: binance-ai-wallet-tools
+    strategy:
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm ci
+      - name: 语法检查
+        run: for f in $(find src scripts test -name "*.mjs"); do node --check "$f"; done
+      - name: 单元测试（花钱规则、预演检查、报价识别）
+        run: npm test
+      - name: 隐私检查（地址、本机路径、邮箱、密钥）
+        run: npm run check

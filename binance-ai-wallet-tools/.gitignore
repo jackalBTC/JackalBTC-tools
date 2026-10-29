@@ -1,0 +1,21 @@
+# 依赖
+node_modules/
+
+# 你自己的数据、日志、配置：永远不提交
+data/
+logs/
+config/config.json
+.env
+*.log
+
+# 第三方 skill 由用户自己安装，不随本仓库分发
+.claude/skills/*
+!.claude/skills/binance-ai-wallet-tools/
+!.claude/settings.json
+.claude/settings.local.json
+.agents/
+skills-lock.json
+
+.DS_Store
+
+.env.*

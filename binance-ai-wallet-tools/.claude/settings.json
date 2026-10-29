@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "deny": [
+      "Edit(config/config.json)",
+      "Write(config/config.json)",
+      "Edit(config/config.example.json)",
+      "Write(config/config.example.json)",
+      "Read(~/.config/binance-ai-wallet-tools/**)",
+      "Edit(~/.config/binance-ai-wallet-tools/**)",
+      "Write(~/.config/binance-ai-wallet-tools/**)"
+    ]
+  }
+}

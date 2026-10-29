@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>币安 AI 钱包工具 · 链上打新台</title>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+<style>
+:root{
+  --bg:#0c0d0f; --bg-2:#121417; --surface:#16181c; --surface-2:#1d2025; --line:#262a30; --line-2:#323840;
+  --text:#eeeff1; --text-2:#a9aeb6; --text-3:#727982;
+  --accent:#e9b52e; --accent-ink:#1a1405; --accent-soft:rgba(233,181,46,.12);
+  --good:#4fbf8a; --bad:#de6a5f;
+  --radius:16px; --radius-sm:10px;
+  --shadow:0 1px 0 rgba(255,255,255,.04) inset, 0 14px 44px -20px rgba(0,0,0,.75);
+  --sans:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+  --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: light){
+  :root{
+    --bg:#f3f3f1; --bg-2:#ebebe8; --surface:#fbfbfa; --surface-2:#f0f0ed; --line:#e0e0dc; --line-2:#d0d0ca;
+    --text:#16171a; --text-2:#51555b; --text-3:#83878d;
+    --accent:#b5830b; --accent-ink:#fffaf0; --accent-soft:rgba(181,131,11,.1);
+    --shadow:0 1px 0 rgba(255,255,255,.7) inset, 0 10px 30px -18px rgba(40,40,30,.25);
+  }
+}
+*{box-sizing:border-box}
+html{font-size:16px}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(1100px 460px at 88% -12%,var(--accent-soft),transparent 60%)}
+a{color:inherit}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.wrap{position:relative;z-index:1;max-width:none;margin:0;padding:0 28px 72px}
+
+nav{position:sticky;top:0;z-index:20;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);background:color-mix(in srgb,var(--bg) 80%,transparent);border-bottom:1px solid var(--line)}
+nav .in{max-width:none;margin:0;padding:0 28px;height:70px;display:flex;align-items:center;gap:20px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:19px;letter-spacing:.02em;white-space:nowrap}
+.brand i{font-size:25px;color:var(--accent)}
+.chip{display:inline-flex;align-items:center;gap:10px;height:38px;padding:0 14px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:14px;color:var(--text-2);white-space:nowrap}
+.chip b{color:var(--text);font-weight:600}
+.state{display:inline-flex;align-items:center;gap:6px;font-size:13px}
+.state.ok{color:var(--good)} .state.off{color:var(--bad)}
+.spacer{flex:1}
+.btn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 16px;border-radius:999px;border:1px solid var(--line-2);background:var(--surface-2);color:var(--text);font:inherit;font-size:14px;cursor:pointer;transition:transform .15s,border-color .2s}
+.btn:hover{border-color:var(--accent)} .btn:active{transform:scale(.97)}
+.btn.spin i{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.muted{color:var(--text-3);font-size:13px}
+.accent{color:var(--accent)}
+
+.hero{display:grid;grid-template-columns:1.4fr 1fr;gap:20px;margin-top:30px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px 26px}
+.label{font-size:14.5px;color:var(--text-2);display:flex;align-items:center;gap:8px}
+.label i{font-size:18px;color:var(--text-3)}
+.total{font-size:clamp(42px,4vw,60px);font-weight:600;line-height:1.05;margin:14px 0 4px}
+.total small{font-size:.4em;color:var(--text-3);font-weight:500;margin-left:6px}
+.bars{display:flex;height:9px;border-radius:999px;overflow:hidden;gap:2px;margin:20px 0 16px}
+.bars span{display:block;height:100%}
+.tok{display:grid;grid-template-columns:auto 1fr auto;gap:5px 12px;align-items:center;font-size:14.5px}
+.tok .sw{width:9px;height:9px;border-radius:2px}
+.tok .v{text-align:right}
+.tok .sub{grid-column:2/4;color:var(--text-3);font-size:13px;margin-top:-2px;margin-bottom:6px}
+.metric{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:10px 0;font-size:14.5px;color:var(--text-2)}
+.metric+.metric{border-top:1px solid var(--line)}
+.metric b{color:var(--text);font-weight:500}
+.big2{font-size:34px;font-weight:600;margin:12px 0 2px}
+.card.feature{background:linear-gradient(160deg,color-mix(in srgb,var(--accent) 9%,var(--surface)) 0%,var(--surface) 55%)}
+.gauge{height:7px;border-radius:999px;background:var(--surface-2);margin:14px 0 6px;overflow:hidden}
+.gauge span{display:block;height:100%;background:var(--accent);border-radius:999px;transition:width .8s cubic-bezier(.16,1,.3,1)}
+
+section{margin-top:52px}
+h2{font-size:23px;font-weight:600;margin:0 0 18px;display:flex;align-items:center;gap:10px}
+h2 .count{font-family:var(--mono);font-size:14px;color:var(--text-3);font-weight:500}
+
+.card,.pc,.proj,.pcard,.nft{min-width:0}
+.metric>span:first-child{flex:none;white-space:nowrap}
+.metric>span:last-child{min-width:0;text-align:right;overflow-wrap:anywhere}
+.blk p,.blk li,.proj p,.rc .tx,.ask{overflow-wrap:anywhere}
+.foot a,.kv dd{min-width:0;max-width:100%}
+.foot .addr span{max-width:320px}
+.pl{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:top}
+/* pending */
+.pending{display:grid;gap:18px}
+.pcard{border-color:color-mix(in srgb,var(--accent) 45%,var(--line));padding:26px 28px}
+.pcard .hd{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.pcard .t{font-size:21px;font-weight:600}
+.pcard .sub{font-size:14px;color:var(--text-2);margin-top:4px}
+.ask{margin-top:16px;padding:14px 16px;border-radius:var(--radius-sm);background:var(--accent-soft);font-size:15px;line-height:1.7}
+.ask b{color:var(--accent)}
+.cols{display:grid;grid-template-columns:repeat(3,1fr);gap:20px 30px;margin-top:20px}
+.blk h4{margin:0 0 6px;font-size:13.5px;color:var(--text-3);font-weight:500}
+.blk p,.blk li{margin:0;font-size:15px;line-height:1.75;color:var(--text)}
+.blk ul{margin:0;padding-left:18px}
+.cols .blk:has(ul){grid-column:span 2}
+@media (max-width:768px){.cols .blk:has(ul){grid-column:auto}}
+.foot{display:flex;flex-wrap:wrap;gap:10px 22px;margin-top:20px;padding-top:16px;border-top:1px solid var(--line)}
+
+/* positions */
+.pos{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px}
+.pc .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.pc .nm{font-size:17.5px;font-weight:600}
+.pc .held{font-size:30px;font-weight:600;margin:12px 0 2px}
+.pc .held small{font-size:15px;color:var(--text-3);font-weight:500;margin-left:6px}
+.pl{font-size:13.5px;padding:3px 10px;border-radius:999px;background:var(--surface-2)}
+.pl.up{color:var(--good)} .pl.down{color:var(--bad)}
+.mk{font-size:12.5px;padding:3px 10px;border-radius:999px;border:1px solid var(--line-2);color:var(--text-2);white-space:nowrap}
+.mk.live{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}
+
+/* radar */
+.radar{display:grid;grid-template-columns:320px 1fr;gap:20px}
+.rlist{display:grid;gap:0}
+.rc{display:grid;grid-template-columns:110px 1fr auto;gap:16px;align-items:start;padding:14px 4px;font-size:14.5px}
+.rc+.rc{border-top:1px solid var(--line)}
+.rc time{font-family:var(--mono);font-size:13px;color:var(--text-3)}
+.rc .k{font-family:var(--mono);font-size:13.5px;color:var(--text)}
+.rc .tx{color:var(--text-2);font-size:13.5px;line-height:1.6;margin-top:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tagx{font-size:12.5px;padding:2px 9px;border-radius:999px;border:1px solid var(--line-2);color:var(--text-2);white-space:nowrap}
+.tagx.done{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.tagx.wait{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}
+
+/* jobs */
+.jobs{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.job .top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.job .t{font-weight:600;font-size:17px}
+.pill{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px;border-radius:999px;font-size:13px;border:1px solid var(--line)}
+.pill.on{color:var(--good);border-color:color-mix(in srgb,var(--good) 40%,var(--line))}
+.pill.off{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 40%,var(--line))}
+.log{font-family:var(--mono);font-size:12.5px;line-height:1.8;color:var(--text-2);background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius-sm);padding:12px 14px;max-height:210px;overflow:auto;white-space:pre-wrap;word-break:break-all}
+.log .hl{color:var(--text)}
+.progress{font-size:14.5px;color:var(--text-2);margin-bottom:10px}
+
+/* collection */
+.tabs{display:inline-flex;flex-wrap:wrap;padding:4px;border-radius:999px;background:var(--surface);border:1px solid var(--line);gap:4px;margin-bottom:18px}
+.tabs button{border:0;background:transparent;color:var(--text-2);font:inherit;font-size:14px;height:34px;padding:0 16px;border-radius:999px;cursor:pointer}
+.tabs button.act{background:var(--surface-2);color:var(--text);box-shadow:0 0 0 1px var(--line-2) inset}
+.tabs button .c{font-family:var(--mono);color:var(--text-3);margin-left:4px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:16px}
+.nft{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;transition:transform .25s cubic-bezier(.16,1,.3,1),border-color .2s}
+.nft:hover{transform:translateY(-3px);border-color:var(--line-2)}
+.nft .img{aspect-ratio:1;background:var(--bg-2);display:grid;place-items:center;overflow:hidden}
+.nft .img img{width:100%;height:100%;object-fit:cover;display:block;image-rendering:pixelated}
+.nft .img i{font-size:34px;color:var(--text-3)}
+.nft .meta{padding:11px 13px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.nft .id{font-family:var(--mono);font-size:14px}
+.rar{font-size:12px;padding:2px 9px;border-radius:999px;border:1px solid var(--line-2);color:var(--text-2);white-space:nowrap}
+.rar.top{color:var(--accent-ink);background:var(--accent);border-color:var(--accent);font-weight:600}
+.rar.hi{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}
+.nft.top{border-color:color-mix(in srgb,var(--accent) 55%,var(--line))}
+.nft .tr{padding:0 13px 13px;font-size:12.5px;color:var(--text-3);line-height:1.5}
+
+/* projects */
+.projects{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:18px}
+.proj .row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.proj .name{font-size:19px;font-weight:600}
+.proj .type{font-size:13.5px;color:var(--text-3);margin-top:4px}
+.rate{font-size:13px;padding:3px 11px;border-radius:999px;border:1px solid var(--line-2);white-space:nowrap}
+.rate.go{color:var(--accent-ink);background:var(--accent);border-color:var(--accent);font-weight:600}
+.rate.watch{color:var(--text-2)}
+.rate.avoid{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,var(--line))}
+.proj p{font-size:14.5px;line-height:1.75;color:var(--text-2);margin:14px 0}
+.kv{display:grid;grid-template-columns:84px 1fr;gap:8px 12px;font-size:14px;align-items:center}
+.kv dt{color:var(--text-3)} .kv dd{margin:0;min-width:0}
+.addr{font-family:var(--mono);font-size:13px;display:inline-flex;align-items:center;gap:6px;color:var(--text-2);text-decoration:none;max-width:100%}
+.addr:hover{color:var(--accent)}
+.addr span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.xlink{display:inline-flex;align-items:center;gap:6px;color:var(--text);text-decoration:none;font-size:14px}
+.xlink:hover{color:var(--accent)}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{font-size:12.5px;padding:2px 9px;border-radius:6px;background:var(--surface-2);color:var(--text-2)}
+
+/* timeline */
+.tl{display:grid;gap:0}
+.ev{display:grid;grid-template-columns:140px 190px 1fr auto;gap:16px;align-items:center;padding:13px 4px;font-size:14.5px}
+.ev+.ev{border-top:1px solid var(--line)}
+.ev time{font-family:var(--mono);color:var(--text-3);font-size:13px}
+.ev .p{font-size:13.5px;color:var(--text-2)}
+.ev a.tx{font-family:var(--mono);font-size:13px;color:var(--text-2);text-decoration:none;display:inline-flex;gap:6px;align-items:center}
+.ev a.tx:hover{color:var(--accent)}
+.step{display:inline-block;font-size:12px;padding:1px 8px;border-radius:6px;background:var(--surface-2);color:var(--text-2);margin-right:6px}
+.step.execute,.step.confirm{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.step.abort{color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,var(--surface))}
+.step.approve{color:var(--accent);background:var(--accent-soft)}
+
+.sk{background:linear-gradient(90deg,var(--surface-2) 0%,var(--line) 50%,var(--surface-2) 100%);background-size:200% 100%;animation:sh 1.4s ease-in-out infinite;border-radius:6px}
+@keyframes sh{to{background-position:-200% 0}}
+.err{font-size:14px;color:var(--bad);display:flex;gap:8px;align-items:center}
+.empty{padding:28px;text-align:center;color:var(--text-3);font-size:14.5px;border:1px dashed var(--line-2);border-radius:var(--radius)}
+footer{margin-top:60px;color:var(--text-3);font-size:13px;display:flex;gap:8px;align-items:center}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;background:var(--surface-2);border:1px solid var(--line-2);padding:10px 16px;border-radius:999px;font-size:14px;transition:all .3s cubic-bezier(.16,1,.3,1);z-index:30}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.reveal{opacity:0;transform:translateY(10px);transition:opacity .6s cubic-bezier(.16,1,.3,1),transform .6s cubic-bezier(.16,1,.3,1)}
+.reveal.in{opacity:1;transform:none}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}.reveal{opacity:1;transform:none}}
+@media (max-width:1200px){.hero{grid-template-columns:1fr 1fr}.hero .card:first-child{grid-column:1/-1}.cols{grid-template-columns:1fr 1fr}.radar{grid-template-columns:1fr}}
+@media (max-width:768px){
+  .wrap,nav .in{padding-left:16px;padding-right:16px}
+  .hero,.jobs,.cols{grid-template-columns:1fr}
+  .projects,.pos{grid-template-columns:1fr}
+  .ev{grid-template-columns:1fr auto;gap:4px 12px}.ev time{grid-column:1/-1}.ev .p{display:none}
+  .rc{grid-template-columns:1fr auto}.rc time{grid-column:1/-1}
+  nav .hide-sm{display:none}
+}
+
+/* ---- 紧凑版 ---- */
+html{font-size:15px}
+.wrap{padding:0 24px 56px} nav .in{padding:0 24px;height:60px}
+.brand{font-size:17px}.brand i{font-size:22px}
+.chip,.btn{height:34px;font-size:13px}
+.card{padding:18px 20px;border-radius:14px}
+.hero{gap:14px;margin-top:18px}
+.total{font-size:clamp(34px,3vw,46px);margin:10px 0 2px}
+.big2{font-size:26px;margin:8px 0 2px}
+.label{font-size:13.5px}
+.metric{padding:7px 0;font-size:13.5px}
+.tok{font-size:13.5px}.tok .sub{font-size:12px}
+section{margin-top:34px}
+h2{font-size:18px;margin:0 0 12px}
+.pos{grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px}
+.pc .nm{font-size:15.5px}.pc .held{font-size:24px;margin:8px 0 2px}
+.pl{font-size:12.5px}
+.pcard{padding:20px 22px}.pcard .t{font-size:18px}
+.ask{font-size:14px;padding:11px 14px;margin-top:12px}
+.cols{gap:14px 24px;margin-top:14px}
+.blk p,.blk li{font-size:13.5px;line-height:1.65}
+.radar{grid-template-columns:280px 1fr;gap:14px}
+.rc{padding:10px 4px;font-size:13.5px;grid-template-columns:96px 1fr auto}
+.rc .tx{font-size:12.5px}
+.jobs{gap:14px}.job .t{font-size:15px}.log{font-size:12px;max-height:170px}
+.grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.projects{grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px}
+.proj .name{font-size:16.5px}.proj p{font-size:13.5px;margin:10px 0}
+.kv{font-size:13px;grid-template-columns:72px 1fr}
+.ev{font-size:13.5px;padding:10px 4px;grid-template-columns:120px 170px 1fr auto}
+.prog{margin-top:12px}.pr-top{display:flex;justify-content:space-between;font-size:12.5px;color:var(--text-2)}.prog .gauge{margin:6px 0 0;height:6px}
+
+/* 分页 */
+.viewtabs{position:sticky;top:60px;z-index:15;display:flex;gap:6px;flex-wrap:wrap;margin:16px 0 0;padding:8px 0;background:var(--bg)}
+.viewtabs button{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--text-2);font:inherit;font-size:14px;cursor:pointer}
+.viewtabs button:hover{border-color:var(--line-2);color:var(--text)}
+.viewtabs button.act{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.viewtabs .b:not(:empty){font-family:var(--mono);font-size:12px;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--bad);color:#fff;display:inline-grid;place-items:center}
+.view{display:none}.view.on{display:block}.hero.view.on{display:grid}
+.view.on.reveal{opacity:1;transform:none}
+section.view{margin-top:18px}
+/* 待确认：折叠成一行 */
+.pend-row{border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line));border-radius:14px;background:var(--surface)}
+.pend-row>summary{list-style:none;display:grid;grid-template-columns:minmax(160px,1.1fr) 3fr auto;gap:18px;align-items:center;padding:14px 18px;cursor:pointer}
+.pend-row>summary::-webkit-details-marker{display:none}
+.pend-row .t{font-size:16px;font-weight:600}.pend-row .sub{font-size:12.5px;color:var(--text-3);margin-top:2px}
+.pend-row .q{font-size:13.5px;line-height:1.6}.pend-row .q b{color:var(--accent)}
+.pend-row .act{display:flex;gap:8px;align-items:center;white-space:nowrap;font-size:13px;color:var(--text-2)}
+.pend-row .act i{transition:transform .2s}.pend-row[open] .act i{transform:rotate(180deg)}
+.pend-row .body{padding:0 18px 16px;border-top:1px solid var(--line)}
+@media (max-width:900px){.pend-row>summary{grid-template-columns:1fr}}
+.news{display:grid;gap:10px}
+.nw{display:grid;grid-template-columns:118px 92px 1fr auto;gap:14px;align-items:start;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 16px}
+.nw time{font-family:var(--mono);font-size:12.5px;color:var(--text-3);padding-top:2px}
+.nw .lv{font-size:12px;padding:2px 9px;border-radius:999px;border:1px solid var(--line-2);color:var(--text-2);text-align:center;white-space:nowrap}
+.nw .lv.重要{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.nw .lv.机会{color:var(--good);border-color:color-mix(in srgb,var(--good) 45%,var(--line))}
+.nw .lv.注意{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,var(--line))}
+.nw .tt{font-size:14.5px;font-weight:600}.nw .sm{font-size:13px;color:var(--text-2);line-height:1.65;margin-top:3px}
+.nw .ac{font-size:12.5px;color:var(--accent);margin-top:4px}
+.nw-r{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.nw.read{opacity:.6}.nw.read .lv.重要{background:transparent;color:var(--text-2);border-color:var(--line-2)}
+@media (max-width:900px){.nw{grid-template-columns:1fr}}
+/* 总览条 */
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:18px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;min-width:0}
+.kpi .k{font-size:12.5px;color:var(--text-3);display:flex;align-items:center;gap:6px}
+.kpi .v{font-size:24px;font-weight:600;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi .s{font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi.hot{border-color:color-mix(in srgb,var(--accent) 55%,var(--line));background:linear-gradient(160deg,color-mix(in srgb,var(--accent) 10%,var(--surface)),var(--surface) 70%)}
+@media (max-width:1200px){.kpis{grid-template-columns:repeat(3,1fr)}}
+@media (max-width:768px){.kpis{grid-template-columns:1fr 1fr}}
+.pager{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:16px}
+.pager button{min-width:34px;height:32px;padding:0 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--text-2);font:inherit;font-size:13px;cursor:pointer}
+.pager button.act{background:var(--surface-2);color:var(--text);border-color:var(--line-2)}
+.pager button:disabled{opacity:.35;cursor:default}
+.pager .muted{margin-left:8px;font-size:12px}
+.pager.mini{margin-top:10px;justify-content:space-between}.pager.mini .muted{margin:0}.pager.mini button{min-width:30px;height:28px}
+table.rev{width:100%;border-collapse:collapse;font-size:12.5px}
+table.rev th{text-align:left;font-weight:600;color:var(--text-3);padding:8px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+table.rev td{padding:7px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+table.rev td span.warn,table.rev td span.ok{display:block}
+table.rev .warn{color:var(--warn,#d98a00)} table.rev .ok{color:var(--good,#1a9a5a)}
+</style>
+</head>
+<body>
+<nav><div class="in">
+  <div class="brand"><i class="ph-fill ph-crosshair-simple"></i>链上打新台 <span class="muted" style="font-weight:400">币安 AI 钱包工具</span></div>
+  <div class="chip hide-sm" id="walletChip"><i class="ph ph-wallet"></i><span class="sk" style="width:200px;height:12px"></span></div>
+  <div class="spacer"></div>
+  <span class="muted hide-sm" id="updated">读取中</span>
+  <button class="btn" id="refresh"><i class="ph ph-arrows-clockwise"></i>刷新</button>
+</div></nav>
+
+<main class="wrap">
+  <div class="kpis">
+    <a class="kpi" href="#top" style="text-decoration:none;color:inherit"><div class="k"><i class="ph ph-wallet"></i>总资产估值</div><div class="v num" id="kTotal">-</div><div class="s" id="kTotalS">代币 + NFT（按稀有度地板价）</div></a>
+    <div class="kpi"><div class="k"><i class="ph ph-images"></i>NFT 估值</div><div class="v num" id="kNft">-</div><div class="s" id="kNftS">-</div></div>
+    <a class="kpi" id="kPendBox" href="#pendingSec" style="text-decoration:none;color:inherit"><div class="k"><i class="ph ph-hand-pointing"></i>待你确认</div><div class="v num" id="kPend">-</div><div class="s" id="kPendS">-</div></a>
+    <div class="kpi"><div class="k"><i class="ph ph-lightning"></i>今天打了</div><div class="v num" id="kToday">-</div><div class="s" id="kTodayS">-</div></div>
+    <div class="kpi"><div class="k"><i class="ph ph-broadcast"></i>推特雷达</div><div class="v" id="kRadar">-</div><div class="s" id="kRadarS">-</div></div>
+  </div>
+  <div class="viewtabs" id="viewTabs">
+    <button data-v="overview"><i class="ph ph-squares-four"></i>总览<span class="b" id="tbPend"></span></button>
+    <button data-v="market"><i class="ph ph-chart-line-up"></i>持仓与市场</button>
+    <button data-v="radar"><i class="ph ph-broadcast"></i>推特雷达</button>
+    <button data-v="news"><i class="ph ph-megaphone"></i>官推动态<span class="b" id="tbNews"></span></button>
+    <button data-v="nft"><i class="ph ph-images"></i>收藏</button>
+    <button data-v="ledger"><i class="ph ph-notebook"></i>项目台账</button>
+    <button data-v="review"><i class="ph ph-clock-counter-clockwise"></i>复盘</button>
+    <button data-v="log"><i class="ph ph-list-checks"></i>操作日志</button>
+  </div>
+  <div class="hero view" data-view="overview">
+    <div class="card reveal" id="cardTotal">
+      <div class="label"><i class="ph ph-coins"></i>代币总值（当前登录的 AI 钱包）</div>
+      <div class="total num"><span class="sk" style="display:inline-block;width:240px;height:50px"></span></div>
+      <div class="muted" id="totalNote">不含 NFT 与未识别的空投币</div>
+      <div class="bars" id="bars"></div>
+      <div class="tok" id="tokList"></div>
+    </div>
+    <div class="card reveal">
+      <div class="label"><i class="ph ph-gas-pump"></i>Gas 与收藏</div>
+      <div class="big2 num" id="gasBig"><span class="sk" style="display:inline-block;width:130px;height:30px"></span></div>
+      <div class="muted" id="gasNote">BNB 余额</div>
+      <div class="gauge"><span id="gasGauge" style="width:0"></span></div>
+      <div class="muted" style="margin-bottom:10px" id="gasRule">余额过低时不会发交易</div>
+      <div id="collectMetrics"></div>
+      <div class="pager mini" id="collectPager"></div>
+    </div>
+  </div>
+
+  <section class="reveal view" data-view="overview" id="pendingSec">
+    <h2><i class="ph-fill ph-hand-pointing accent"></i>待你确认 <span class="count" id="pendingCount"></span></h2>
+    <div class="pending" id="pending"></div>
+  </section>
+
+  <section class="reveal view" data-view="overview">
+    <h2><i class="ph ph-megaphone"></i>官推动态 <span class="count">重要与机会</span></h2>
+    <div class="news" id="newsTop"></div>
+  </section>
+  <section class="reveal view" data-view="news">
+    <h2><i class="ph ph-megaphone"></i>已参与项目的官推动态 <span class="count" id="newsCount"></span></h2>
+    <div class="news" id="newsAll"></div>
+  </section>
+  <section class="reveal view" data-view="market">
+    <h2><i class="ph ph-chart-line-up"></i>持仓与市场 <span class="count" id="posNote"></span></h2>
+    <div class="tabs" id="posFilter"></div>
+    <div class="pos" id="positions"></div>
+  </section>
+
+  <section class="reveal view" data-view="radar">
+    <h2><i class="ph ph-broadcast"></i>推特雷达 <span class="count" id="radarCount"></span></h2>
+    <div class="radar">
+      <div class="card" id="radarStatus"></div>
+      <div class="card rlist" id="radarList" style="padding:6px 20px"></div>
+    </div>
+  </section>
+
+  <section class="reveal view" data-view="radar">
+    <h2><i class="ph ph-pulse"></i>雷达运行日志</h2>
+    <div class="card job" id="jobRadar"></div>
+  </section>
+
+  <section class="reveal view" data-view="nft">
+    <h2>收藏 <span class="count" id="nftCount"></span></h2>
+    <div class="tabs" id="nftTabs"></div>
+    <div class="grid" id="nftGrid"></div>
+  </section>
+
+  <section class="reveal view" data-view="ledger">
+    <h2>项目台账 <span class="count" id="projCount"></span></h2>
+    <div class="projects" id="projects"></div>
+    <div class="pager" id="projPager"></div>
+  </section>
+
+  <section class="reveal view" data-view="review">
+    <h2>复盘：打过的项目后来怎么样了 <span class="count" id="revCount"></span></h2>
+    <p class="muted" style="margin:-4px 0 10px">每 30 分钟后台检查：接没接上市场、地板价、链上是否出现很多人给同一个地址整包授权（疑似开了市场）。空投情况由 Claude 看到官推后记到台账的 outcome 字段。</p>
+    <div class="kpis" id="revSum" style="margin:0 0 14px"></div>
+    <div class="card" style="padding:4px 0;overflow-x:auto"><table class="rev" id="review"></table></div>
+  </section>
+
+  <section class="reveal view" data-view="log">
+    <h2>操作日志 <span class="count" id="evCount"></span></h2>
+    <div class="tabs" id="evFilter"></div>
+    <div class="card tl" id="timeline" style="padding:6px 20px"></div>
+  </section>
+
+  <footer><i class="ph ph-lock-simple"></i>只读看板，只在本机运行，不签名、不发交易、不保存任何密钥。要打或不打，在 Claude Code 对话里说。</footer>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const fmt = (n, d = 2) => n == null || isNaN(n) ? '-' : Number(n).toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: Math.min(d, 2) });
+const usd = n => n == null || isNaN(n) ? '-' : (n < 0 ? '-$' : '$') + fmt(Math.abs(n), 2);
+const short = a => a ? esc(String(a).slice(0, 6) + '…' + String(a).slice(-4)) : '';
+// 只允许标准的地址 / 交易哈希，其余一律指向 #
+const scan = (a, kind = 'address') => /^0x[0-9a-fA-F]{40}$|^0x[0-9a-fA-F]{64}$/.test(String(a)) ? `https://bscscan.com/${kind === 'tx' ? 'tx' : 'address'}/${a}` : '#';
+// 外部链接只放行 http(s)，挡住 javascript: 之类
+const safeUrl = u => /^https?:\/\/[^\s"'<>]+$/i.test(String(u || '')) ? esc(u) : '#';
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const PALETTE = ['var(--accent)', '#8a9099', '#5d636b', '#3f444b', '#2c3036'];
+const xUrl = h => { const n = (String(h || '').replace(/^@/, '').match(/^[A-Za-z0-9_]{1,15}/) || [])[0]; return n ? 'https://x.com/' + n : '#'; };
+let BNB_USD = null, PROJECTS = [];
+function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1600); }
+async function get(u) { const r = await fetch(u); const j = await r.json(); if (!r.ok || j.error) throw new Error(j.error || r.status); return j; }
+const ts = t => new Date(t).toLocaleString('zh-CN', { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+async function loadOverview() {
+  try {
+    const o = await get('/api/overview');
+    const ok = o.status === 'CONNECTED';
+    $('#walletChip').innerHTML = `<i class="ph ph-wallet"></i>${o.wallet ? `<a class="addr num" href="${scan(o.wallet)}" target="_blank"><span>${short(o.wallet)}</span></a>` : '<span class="muted">未读到地址</span>'}
+      <span class="state ${ok ? 'ok' : 'off'}"><i class="ph-fill ${ok ? 'ph-check-circle' : 'ph-warning-circle'}"></i>${ok ? '已连接' : esc(o.status)}</span>`;
+    const isKnown = t => t.symbol === 'BNB' || (t.price > 0 && t.value >= 0.01);
+    const known = o.tokens.filter(isKnown).sort((a, b) => b.value - a.value), junk = o.tokens.filter(t => !isKnown(t));
+    const total = known.reduce((s, t) => s + (t.value || 0), 0);
+    const bnb = o.tokens.find(t => t.symbol === 'BNB'); BNB_USD = bnb ? bnb.price : BNB_USD;
+    $('#cardTotal .total').innerHTML = `${usd(total)}<small>USD</small>`;
+    KP.tokens = total; renderKpi();
+    $('#bars').innerHTML = known.map((t, i) => `<span style="width:${total ? Math.max(2, t.value / total * 100) : 0}%;background:${PALETTE[i % 5]}"></span>`).join('');
+    $('#tokList').innerHTML = known.map((t, i) => `<span class="sw" style="background:${PALETTE[i % 5]}"></span><span>${esc(t.symbol)}</span><span class="v num">${usd(t.value)}</span>
+      <span class="sub num">${fmt(t.balance, t.balance > 1000 ? 0 : 4)} × $${t.price < 0.01 ? t.price.toPrecision(3) : fmt(t.price, 4)}</span>`).join('')
+      + (junk.length ? `<span></span><span class="muted" style="grid-column:2/4">另有 ${junk.length} 个未识别代币（${junk.map(t => esc(t.symbol)).join('、')}），可能是空投垃圾，勿操作，未计入总值</span>` : '');
+    const b = bnb ? bnb.balance : 0;
+    $('#gasBig').innerHTML = `${fmt(b, 4)} <span style="font-size:16px;color:var(--text-3)">BNB</span>`;
+    $('#gasNote').textContent = bnb ? `约 ${usd(bnb.value)}` : 'BNB 余额';
+    $('#gasGauge').style.width = Math.min(100, b / 0.15 * 100) + '%';
+    $('#gasGauge').style.background = b < o.lowBnb ? 'var(--bad)' : 'var(--accent)';
+    $('#gasRule').textContent = `低于 ${o.minBnbForTx} BNB 不会发交易；低于 ${o.lowBnb} 会提醒`;
+    if (b < o.lowBnb) $('#gasNote').innerHTML = `<span class="err"><i class="ph ph-warning"></i>低于 ${o.lowBnb} BNB，请补 gas</span>`;
+    $('#updated').textContent = '更新于 ' + new Date(o.at).toLocaleTimeString('zh-CN', { hour12: false });
+  } catch (e) { $('#cardTotal .total').innerHTML = `<span class="err"><i class="ph ph-warning"></i>读取失败：${esc(e.message)}</span>`; }
+}
+
+
+// ---------- 总览条 ----------
+const KP = { tokens: null, nft: null };
+function renderKpi() {
+  if (KP.nft != null) { $('#kNft').textContent = usd(KP.nft.usd); $('#kNftS').textContent = `${KP.nft.count} 件 · 按稀有度地板价`; }
+  if (KP.tokens != null && KP.nft != null) {
+    const t = KP.tokens + KP.nft.usd;
+    $('#kTotal').textContent = usd(t);
+    $('#kTotalS').textContent = `代币 ${usd(KP.tokens)} · NFT ${usd(KP.nft.usd)}`;
+  }
+}
+// ---------- 持仓与市场 ----------
+const toUsd = (amt, cur) => amt == null ? null : cur === 'USDT' ? amt : cur === 'BNB' && BNB_USD ? amt * BNB_USD : null;
+const costUsd = c => c ? (c.USDT || 0) + (c.BNB ? (BNB_USD ? c.BNB * BNB_USD : NaN) : 0) : null;
+const costTxt = c => !c ? '未统计' : Object.entries(c).filter(([, v]) => v > 0).map(([u, v]) => `${fmt(v, u === 'BNB' ? 5 : 2)} ${esc(u)}`).join(' + ') || '0（仅 gas）';
+async function loadPositions(retry = 0) {
+  if (!$('#positions').children.length) $('#positions').innerHTML = Array.from({ length: 4 }, () => `<div class="card pc"><div class="sk" style="width:60%;height:16px"></div><div class="sk" style="width:30%;height:26px;margin:14px 0"></div><div class="sk" style="height:10px;margin:8px 0"></div><div class="sk" style="height:10px;margin:8px 0"></div><div class="muted" style="margin-top:12px">正在读取链上市场数据，服务刚重启时第一次约需 1 分钟…</div></div>`).join('');
+  try {
+    const d = await get('/api/positions'); POSD = d;
+    $('#posNote').textContent = `后台每 5 分钟刷新`;
+    { let u = 0, c = 0; for (const p of d.positions) { c += p.held; const v = p.value != null && isFinite(p.value) && p.value < 1e9 ? toUsd(p.value, p.currency) : null; if (v) u += v; } KP.nft = { usd: u, count: c }; renderKpi(); }
+    renderPositions();
+  } catch (e) { if (retry < 3) { setTimeout(() => loadPositions(retry + 1), 15000); return; } $('#positions').innerHTML = `<div class="empty err"><i class="ph ph-warning"></i>市场数据读取失败：${esc(e.message)}，稍后会自动重试</div>`; }
+}
+let POSD = null, POSF = 'open';
+try { POSF = localStorage.getItem('lh-posf') || 'open'; } catch {}
+const isOpen = p => p.marketType && p.marketType !== 'none';
+function renderPositions() {
+  const d = POSD; if (!d) return;
+  const open = d.positions.filter(isOpen), closed = d.positions.filter(p => !isOpen(p));
+  $('#posFilter').innerHTML = [['open', '市场已开放', open.length], ['closed', '市场未开放', closed.length], ['all', '全部', d.positions.length]]
+    .map(([v, t, n]) => `<button class="${v === POSF ? 'act' : ''}" data-f="${v}">${t}<span class="c">${n}</span></button>`).join('');
+  const list = POSF === 'open' ? open : POSF === 'closed' ? closed : d.positions;
+  if (!list.length) { $('#positions').innerHTML = `<div class="empty">${POSF === 'open' ? '还没有已开市场的持仓' : '没有未开市场的持仓'}</div>`; return; }
+  {
+    $('#positions').innerHTML = list.map(p => {
+      const sane = v => v != null && isFinite(v) && v < 1e9 ? v : null;
+      const price = sane(p.floor), kind = p.floor != null ? '地板价' : null;
+      const dec = p.currency === 'BNB' ? 5 : 2;
+      const val = sane(p.value) != null ? toUsd(p.value, p.currency) : null, cu = costUsd(p.cost);
+      const pnl = val != null && cu != null && !isNaN(cu) ? val - cu : null;
+      const mk = p.marketType === 'none' ? `<span class="mk">暂无市场</span>` : p.marketType === 'link' ? `<span class="mk">外部市场</span>` : `<span class="mk live">链上市场</span>`;
+      const held = p.heldByRarity || {}, rar = Object.keys(held);
+      const order = r => RANK[r] ?? 9;
+      const rarRows = p.byRarity && rar.length ? rar.sort((a, b) => order(a) - order(b)).map(r => {
+        const f = p.byRarity[r];
+        return [`<span class="rar ${rarCls(r)}">${RZH[r] || esc(r)}</span> <span class="num">×${held[r]}</span>`,
+          f ? `<b class="num">${fmt(f.floor, dec)} ${esc(p.currency)}</b><span class="muted"> · 在售 ${f.listed}</span>` : `<span class="muted">该档无挂单，暂按整体地板价</span>`];
+      }) : [];
+      const rows = [
+        ['成本', `<b class="num">${costTxt(p.cost)}</b>`],
+        [kind ? (p.byRarity && rar.length ? '整体' + kind : kind) : '市场价', price != null ? `<b class="num">${fmt(price, dec)} ${esc(p.currency)}</b>${p.listed != null ? `<span class="muted"> · 在售 ${p.listed}</span>` : ''}` : `<span class="muted">${p.listed === 0 ? '市场已开，暂无挂单' : esc(p.note || '暂无报价')}</span>`],
+        ...rarRows,
+        [rarRows.length ? '按稀有度估值' : '估算市值', val != null ? `<b class="num">${usd(val)}</b>` : '<span class="muted">-</span>'],
+      ];
+      return `<article class="card pc"><div class="top"><div class="nm">${esc(p.name)}</div>${mk}</div>
+        <div class="held num">${p.held}<small>张</small></div>
+        ${pnl != null ? `<span class="pl ${pnl >= 0 ? 'up' : 'down'} num">${rarRows.length ? '按稀有度估算' : '按' + kind + '估算'} ${pnl >= 0 ? '+' : ''}${usd(pnl)}</span>` : ''}
+        ${p.supply && p.supply.minted != null ? (() => { const m = p.supply.minted, x = p.supply.max, pct = x ? Math.min(100, m / x * 100) : null, done = x && m >= x;
+          return `<div class="prog"><div class="pr-top"><span>铸造进度</span><span class="num">${fmt(m, 0)}${x ? ' / ' + fmt(x, 0) : ''}${pct != null ? `<b class="${done ? '' : 'accent'}"> ${done ? '已铸完' : fmt(pct, 1) + '%'}</b>` : ''}</span></div>${pct != null ? `<div class="gauge"><span style="width:${pct}%;${done ? 'background:var(--text-3)' : ''}"></span></div>` : ''}</div>`; })() : ''}
+        <div style="margin-top:10px">${rows.map(([k, v]) => `<div class="metric"><span>${k}</span><span>${v}</span></div>`).join('')}</div>
+        <div class="foot" style="margin-top:12px;padding-top:12px">${p.url ? `<a class="addr" href="${safeUrl(p.url)}" target="_blank" rel="noreferrer"><i class="ph ph-storefront"></i><span>去市场</span></a>` : ''}<a class="addr" href="${scan(p.contract)}" target="_blank" data-copy="${esc(p.contract)}"><span>${short(p.contract)}</span><i class="ph ph-copy"></i></a></div></article>`;
+    }).join('');
+  }
+}
+
+// ---------- 雷达 ----------
+async function loadRadar() {
+  try {
+    const r = await get('/api/radar');
+    $('#radarCount').textContent = `累计 ${r.total} 个候选`;
+    $('#kRadar').innerHTML = r.running ? '<span class="accent">运行中</span>' : '<span style="color:var(--bad)">未运行</span>'; $('#kRadarS').textContent = `每 ${r.intervalMinutes} 分钟 · ${r.provider === 'grok' ? 'Grok' : '累计 $' + (r.cost ? r.cost.usd : 0)}`;
+    $('#jobRadar').innerHTML = `<div class="progress">后台运行方式见 README「让它一直跑」。下面是 logs/radar.log 最后几行。</div><div class="log">${logHtml(r.lines || [])}</div>`;
+    $('#radarStatus').innerHTML = `<div class="job"><div class="top"><span class="t">X 搜索 · ${r.provider === 'grok' ? 'Grok' : 'twitterapi.io'}</span><span class="pill ${r.running ? 'on' : 'off'}"><i class="ph-fill ${r.running ? 'ph-play-circle' : 'ph-stop-circle'}"></i>${r.running ? '运行中' : '未运行'}</span></div></div>
+      ${[['频率', `每 ${r.intervalMinutes} 分钟`], ['上一轮', r.lastRun ? ts(r.lastRun) : '-'], ['累计请求', r.cost ? `${r.cost.requests} 次` : '-'], ['累计推文', r.cost ? `${r.cost.tweets} 条` : '-'], ['累计花费', r.provider === 'grok' ? '<span class="muted">见 xAI 账单</span>' : r.cost ? `<b class="num accent">$${r.cost.usd}</b>` : '-']]
+        .map(([k, v]) => `<div class="metric"><span>${k}</span><span class="num">${v}</span></div>`).join('')}
+      <p class="muted" style="line-height:1.7;margin:14px 0 0">只提取推文里的文字、网址和合约地址，不执行任何内容。带官网或合约的线索才会交给 Claude 核验。</p>`;
+    if (!r.recent.length) { $('#radarList').innerHTML = `<div class="empty" style="margin:12px 0">还没有候选</div>`; return; }
+    const seenTw = new Set(); const uniq = r.recent.filter(c => !seenTw.has(c.tweet) && seenTw.add(c.tweet));
+    $('#radarList').innerHTML = uniq.slice(0, 15).map(c => {
+      const st = c.project ? c.project.status : '未处理';
+      const cls = st === '已打' ? 'done' : st === '待确认' ? 'wait' : '';
+      return `<div class="rc"><time>${ts(c.ts)}</time><div><div class="k">${esc(c.project ? c.project.name : c.key.replace(/^(site|ca):/, ''))} ${c.kind === 'hot' ? '<span class="tagx wait">热度上升</span>' : ''}</div>
+        <div class="tx">@${esc(c.author)}：${esc(c.text)}</div></div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px"><span class="tagx ${cls}">${esc(st)}</span><a class="addr" href="${safeUrl(c.tweet)}" target="_blank" rel="noreferrer"><i class="ph ph-x-logo"></i><span>原帖</span></a></div></div>`;
+    }).join('');
+  } catch (e) { $('#radarList').innerHTML = `<div class="empty err"><i class="ph ph-warning"></i>${esc(e.message)}</div>`; }
+}
+
+function logHtml(lines) { return lines.length ? lines.map((l, i) => i === lines.length - 1 ? `<span class="hl">${esc(l)}</span>` : esc(l)).join('\n') : '<span class="muted">暂无日志</span>'; }
+
+// ---------- 收藏 ----------
+let NFT = null, TAB = null;
+const RANK = { Legendary: 0, MYTHIC: 0, EPIC: 1, Rare: 1, RARE: 2, Uncommon: 3, Common: 4, COMMON: 4 };
+const rarCls = r => ['Legendary', 'MYTHIC', 'EPIC'].includes(r) ? 'top' : ['Rare', 'RARE'].includes(r) ? 'hi' : '';
+const RZH = { Legendary: '传奇', Rare: '稀有', Uncommon: '罕见', Common: '普通', MYTHIC: '神话', EPIC: '史诗', RARE: '稀有', COMMON: '普通' };
+function renderNfts() {
+  const g = $('#nftGrid');
+  if (!NFT) { g.innerHTML = Array.from({ length: 8 }, () => `<div class="nft"><div class="img sk" style="border-radius:0"></div><div class="meta"><span class="sk" style="width:60px;height:12px"></span></div></div>`).join(''); return; }
+  const cols = NFT.collections.filter(c => c.items.some(i => i.owned));
+  TAB = TAB && cols.find(c => c.id === TAB) ? TAB : cols[0]?.id;
+  $('#nftTabs').innerHTML = cols.map(c => `<button class="${c.id === TAB ? 'act' : ''}" data-tab="${esc(c.id)}">${esc(c.name)}<span class="c">${c.items.filter(i => i.owned).length}</span></button>`).join('');
+  const col = cols.find(c => c.id === TAB);
+  if (!col) { g.innerHTML = `<div class="empty" style="grid-column:1/-1">暂无持仓</div>`; return; }
+  const list = col.items.filter(x => x.owned).sort((a, b) => (RANK[a.rarity] ?? 9) - (RANK[b.rarity] ?? 9) || a.id - b.id);
+  g.innerHTML = list.map(x => {
+    const tr = x.traits ? Object.values(x.traits).filter(Boolean).slice(0, 3).join(' / ') : '';
+    const img = x.image && /^(https:\/\/|data:image\/)/i.test(x.image) ? `<img loading="lazy" referrerpolicy="no-referrer" src="${esc(x.image)}" alt="${esc(col.name)} #${Number(x.id)}" onerror="this.replaceWith(Object.assign(document.createElement('i'),{className:'ph ph-image-broken'}))">` : `<i class="ph ph-image"></i>`;
+    return `<div class="nft ${rarCls(x.rarity) === 'top' ? 'top' : ''}"><div class="img">${img}</div>
+      <div class="meta"><span class="id">#${Number(x.id)}</span>${x.rarity ? `<span class="rar ${rarCls(x.rarity)}">${RZH[x.rarity] || esc(x.rarity)}</span>` : ''}</div>
+      ${tr ? `<div class="tr">${esc(tr)}</div>` : ''}</div>`;
+  }).join('');
+}
+async function loadNfts() {
+  try {
+    NFT = await get('/api/nfts');
+    const owned = c => c.items.filter(i => i.owned);
+    const total = NFT.collections.reduce((s, c) => s + owned(c).length, 0);
+    $('#nftCount').textContent = `${total} 件`;
+    CM = NFT.collections.filter(c => owned(c).length).sort((a, b) => owned(b).length - owned(a).length).map(c => `<div class="metric"><span>${esc(c.name)}</span><span><b class="num">${owned(c).length}</b></span></div>`);
+    renderCollect();
+  } catch (e) { $('#nftGrid').innerHTML = `<div class="empty err" style="grid-column:1/-1"><i class="ph ph-warning"></i>${esc(e.message)}</div>`; return; }
+  renderNfts();
+}
+
+
+let CM = [], CPAGE = 1; const CSIZE = 6;
+function renderCollect() {
+  const pages = Math.max(1, Math.ceil(CM.length / CSIZE)); CPAGE = Math.min(Math.max(1, CPAGE), pages);
+  $('#collectMetrics').innerHTML = CM.slice((CPAGE - 1) * CSIZE, CPAGE * CSIZE).join('');
+  $('#collectPager').innerHTML = pages < 2 ? '' : `<button data-cp="${CPAGE - 1}" ${CPAGE === 1 ? 'disabled' : ''}><i class="ph ph-caret-left"></i></button><span class="muted">${CPAGE} / ${pages} · 共 ${CM.length} 个系列</span><button data-cp="${CPAGE + 1}" ${CPAGE === pages ? 'disabled' : ''}><i class="ph ph-caret-right"></i></button>`;
+}
+
+// ---------- 待确认关闭 ----------
+const DKEY = 'lh-dismissed';
+const getDis = () => { try { return JSON.parse(localStorage.getItem(DKEY) || '{}'); } catch { return {}; } };
+const setDis = d => { try { localStorage.setItem(DKEY, JSON.stringify(d)); } catch {} };
+// 关闭时间之后若雷达又扫到（lastSeen）或项目有更新（updatedAt），就重新显示
+const isDismissed = p => { const t = getDis()[p.id]; if (!t) return false; const latest = [p.lastSeen, p.updatedAt].filter(Boolean).map(x => Date.parse(x)).reduce((a, b) => Math.max(a, b), 0); return latest <= t; };
+document.addEventListener('click', e => {
+  const b = e.target.closest('.dismiss');
+  if (b) { e.preventDefault(); e.stopPropagation(); const d = getDis(); d[b.dataset.id] = Date.now(); setDis(d); renderPending(PROJECTS); toast('已关闭，雷达再扫到会重新提醒'); return; }
+  if (e.target.id === 'undismissAll') { e.preventDefault(); setDis({}); renderPending(PROJECTS); }
+}, true);
+// ---------- 待确认 / 台账 ----------
+const RATE = { '可参与': 'go', '观望': 'watch', '避开': 'avoid' };
+const xHtml = p => p.x ? `<a class="xlink" href="${xUrl(p.x)}" target="_blank" rel="noreferrer"><i class="ph ph-x-logo"></i>${esc(String(p.x).split(/[（(]/)[0])}</a>${p.xNote ? ` <span class="muted">（${esc(p.xNote)}）</span>` : ''}` : '<span class="muted">未找到官推</span>';
+function renderPending(ps) {
+  const all = ps.filter(p => p.status === '待确认');
+  const hidden = all.filter(isDismissed), list = all.filter(p => !isDismissed(p));
+  $('#kPend').textContent = list.length; $('#tbPend').textContent = list.length || ''; $('#kPendBox').classList.toggle('hot', list.length > 0); $('#kPendS').textContent = list.length ? list.map(p => p.name).join('、') : '没有需要你拍板的';
+  $('#pendingCount').textContent = list.length ? `${list.length} 个` : '';
+  const hiddenNote = hidden.length ? `<div class="muted" style="margin-top:8px">已隐藏 ${hidden.length} 个（${hidden.map(p => esc(p.name)).join('、')}），雷达再扫到会自动恢复 · <a href="#" id="undismissAll" class="accent">全部显示</a></div>` : '';
+  if (!list.length) { $('#pending').innerHTML = `<div class="empty"><i class="ph ph-check-circle"></i> 暂时没有需要你拍板的项目。没把握的新项目会以项目卡出现在这里，你在对话里回复「打」或「不打」。</div>` + hiddenNote; return; }
+  const blk = (t, v) => v ? `<div class="blk"><h4>${t}</h4>${Array.isArray(v) ? `<ul>${v.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : `<p>${esc(v)}</p>`}</div>` : '';
+  $('#pending').innerHTML = list.map((p, i) => { const c = p.card || {}; return `<details class="pend-row"${i === 0 && list.length === 1 ? '' : ''}>
+    <summary><div><div class="t">${esc(p.name)} <span class="rate ${RATE[p.rating] || 'watch'}" style="margin-left:6px">${esc(p.rating || '待评')}</span></div><div class="sub">${esc(c.headline || `${p.type} · ${p.price}`)}</div></div>
+      <div class="q"><b>需要你拍板：</b>${esc(c.question || p.reason)}</div>
+      <div class="act">回复「打 ${esc(p.name)}」或「不打」<span class="btn" style="height:30px;padding:0 12px">展开<i class="ph ph-caret-down"></i></span><button class="btn dismiss" data-id="${esc(p.id)}" title="关闭：雷达再扫到时会重新出现" style="height:30px;padding:0 10px"><i class="ph ph-x"></i></button></div></summary>
+    <div class="body"><div class="cols">${blk('项目是什么', c.what)}${blk('怎么玩', c.how)}${blk('费用与条件', c.fees || p.price)}${blk('当前进展', c.progress)}${blk('风险与待核实', c.risks)}${blk('我的判断', p.reason)}</div>
+    <div class="foot">${xHtml(p)}
+      ${p.site ? `<a class="addr" href="${safeUrl(p.site)}" target="_blank" rel="noreferrer"><i class="ph ph-globe"></i><span>${esc(p.site.replace(/^https?:\/\//, ''))}</span></a>` : ''}
+      ${(c.sources || []).slice(0, 3).map(s => `<a class="addr" href="${safeUrl(s)}" target="_blank" rel="noreferrer"><i class="ph ph-link"></i><span>${esc(s.replace(/^https?:\/\//, '').slice(0, 40))}</span></a>`).join('')}
+      ${Object.entries(p.contracts || {}).map(([k, v]) => `<a class="addr" href="${scan(v)}" target="_blank" data-copy="${esc(v)}"><span>${esc(k)} ${short(v)}</span><i class="ph ph-copy"></i></a>`).join('')}
+    </div></div></details>`; }).join('') + hiddenNote;
+}
+async function loadProjects() {
+  const ps = await get('/api/projects').catch(() => []); PROJECTS = ps;
+  renderPending(ps);
+  $('#projCount').textContent = `${ps.length} 个`;
+  renderProjects();
+}
+let PPAGE = 1; const PSIZE = 12;
+function renderProjects() {
+  const ps = [...PROJECTS].sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+  if (!ps.length) { $('#projects').innerHTML = `<div class="empty">还没有项目</div>`; $('#projPager').innerHTML = ''; return; }
+  const pages = Math.ceil(ps.length / PSIZE); PPAGE = Math.min(Math.max(1, PPAGE), pages);
+  const nums = [...Array(pages)].map((_, i) => i + 1);
+  $('#projPager').innerHTML = pages < 2 ? '' : `<button data-pg="${PPAGE - 1}" ${PPAGE === 1 ? 'disabled' : ''}><i class="ph ph-caret-left"></i></button>`
+    + nums.map(n => `<button data-pg="${n}" class="${n === PPAGE ? 'act' : ''}">${n}</button>`).join('')
+    + `<button data-pg="${PPAGE + 1}" ${PPAGE === pages ? 'disabled' : ''}><i class="ph ph-caret-right"></i></button><span class="muted">第 ${(PPAGE - 1) * PSIZE + 1}–${Math.min(PPAGE * PSIZE, ps.length)} 个，共 ${ps.length} 个，按更新时间</span>`;
+  $('#projects').innerHTML = ps.slice((PPAGE - 1) * PSIZE, PPAGE * PSIZE).map(p => `<article class="card proj">
+    <div class="row"><div><div class="name">${esc(p.name)}</div><div class="type">${esc(p.type)} · ${esc(p.price)}</div></div><span class="rate ${RATE[p.rating] || 'watch'}">${esc(p.rating)}</span></div>
+    <p>${esc(p.reason)}</p>
+    <dl class="kv">
+      <dt>状态</dt><dd>${esc(p.status)}</dd>
+      <dt>官推</dt><dd>${xHtml(p)}</dd>
+      ${p.site ? `<dt>官网</dt><dd><a class="addr" href="${safeUrl(p.site)}" target="_blank" rel="noreferrer"><span>${esc(p.site.replace(/^https?:\/\//, ''))}</span><i class="ph ph-arrow-up-right"></i></a></dd>` : ''}
+      ${Object.entries(p.contracts || {}).map(([k, v]) => `<dt>${esc(k)}</dt><dd><a class="addr" href="${scan(v)}" target="_blank" data-copy="${esc(v)}"><span>${esc(v)}</span><i class="ph ph-copy"></i></a></dd>`).join('')}
+      ${p.quality?.length ? `<dt>质量信号</dt><dd class="tags">${p.quality.slice(0, 5).map(q => `<span class="tag">${esc(String(q).slice(0, 24))}</span>`).join('')}</dd>` : ''}
+    </dl></article>`).join('');
+}
+
+// ---------- 日志 ----------
+const STEP = { discover: '发现', verify: '核验', preview: '预演', execute: '执行', confirm: '到手', skip: '跳过', abort: '中止', brief: '简报', approve: '授权口令' };
+let EV = [], EVF = '';
+function renderEvents() {
+  const ev = EVF ? EV.filter(e => e.project === EVF) : EV;
+  $('#evCount').textContent = `${ev.length} 条`;
+  const projs = [...new Set(EV.map(e => e.project))];
+  $('#evFilter').innerHTML = [['', '全部'], ...projs.map(p => [p, p])].map(([v, t]) => `<button class="${v === EVF ? 'act' : ''}" data-p="${esc(v)}">${esc(t)}</button>`).join('');
+  if (!ev.length) { $('#timeline').innerHTML = `<div class="empty" style="margin:12px 0">暂无记录</div>`; return; }
+  $('#timeline').innerHTML = ev.slice(0, 120).map(e => `<div class="ev"><time>${ts(e.ts)}</time>
+    <span class="p"><span class="step ${esc(e.action)}">${STEP[e.action] || esc(e.action)}</span>${esc(e.project)}</span><span>${esc(e.detail)}${e.value ? ` <span class="muted num">${esc(e.value)}</span>` : ''}${e.source ? ` <a class="addr" href="${safeUrl(e.source)}" target="_blank" rel="noreferrer"><i class="ph ph-link"></i></a>` : ''}</span>
+    ${e.txHash ? `<a class="tx" href="${scan(e.txHash, 'tx')}" target="_blank">${short(e.txHash)}<i class="ph ph-arrow-up-right"></i></a>` : e.contract ? `<a class="tx" href="${scan(e.contract)}" target="_blank">${short(e.contract)}<i class="ph ph-arrow-up-right"></i></a>` : '<span></span>'}</div>`).join('');
+}
+async function loadEvents() {
+  EV = await get('/api/events').catch(() => []); renderEvents();
+  const t = await get('/api/today').catch(() => null);
+  if (t) { $('#kToday').textContent = `${t.count} 笔`; $('#kTodayS').textContent = t.projects.length ? `${t.projects.length} 个项目：${t.projects.join('、')}` : '今天还没有新铸造'; }
+}
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('#nftTabs button'); if (t) { TAB = t.dataset.tab; renderNfts(); return; }
+  const b = e.target.closest('#evFilter button'); if (b) { EVF = b.dataset.p; renderEvents(); return; }
+  const pf = e.target.closest('#posFilter button'); if (pf) { POSF = pf.dataset.f; try { localStorage.setItem('lh-posf', POSF); } catch {} renderPositions(); return; }
+  const cp = e.target.closest('#collectPager button[data-cp]'); if (cp && !cp.disabled) { CPAGE = Number(cp.dataset.cp); renderCollect(); return; }
+  const pg = e.target.closest('#projPager button[data-pg]'); if (pg && !pg.disabled) { PPAGE = Number(pg.dataset.pg); renderProjects(); document.querySelector('[data-view="ledger"] h2').scrollIntoView({ behavior: 'smooth' }); return; }
+  const a = e.target.closest('[data-copy]');
+  if (a && e.target.closest('.ph-copy')) { e.preventDefault(); navigator.clipboard.writeText(a.dataset.copy).then(() => toast('已复制合约地址')); }
+});
+const io = new IntersectionObserver(es => es.forEach(x => { if (x.isIntersecting) { x.target.classList.add('in'); io.unobserve(x.target); } }), { threshold: .05 });
+document.querySelectorAll('.reveal').forEach((el, i) => { el.style.transitionDelay = (i < 3 ? i * 70 : 0) + 'ms'; io.observe(el); });
+
+
+
+// ---------- 官推动态 ----------
+const RKEY = 'lh-news-read';
+const getRead = () => { try { return JSON.parse(localStorage.getItem(RKEY) || '{}'); } catch { return {}; } };
+const setRead = r => { try { localStorage.setItem(RKEY, JSON.stringify(r)); } catch {} };
+const nid = x => `${x.project}|${x.ts}|${x.title}`;
+let NEWS = [];
+function renderNews() {
+  const rd = getRead();
+  const row = x => { const read = !!rd[nid(x)], imp = x.level === '重要';
+    return `<div class="nw ${read ? 'read' : ''}"><time>${ts(x.ts)}</time><span class="lv ${esc(x.level)}">${esc(x.level)}</span>
+    <div><div class="tt">${esc((PROJECTS.find(p => p.id === x.project) || {}).name || x.project)}：${esc(x.title)}</div><div class="sm">${esc(x.summary)}</div>${x.action ? `<div class="ac">→ ${esc(x.action)}</div>` : ''}</div>
+    <div class="nw-r"><a class="xlink" href="${safeUrl(x.url)}" target="_blank" rel="noreferrer"><i class="ph ph-x-logo"></i>${esc(x.account)}</a>
+      ${imp ? (read ? `<span class="muted"><i class="ph ph-check"></i> 已读</span>` : `<button class="btn markread" data-id="${esc(nid(x))}" style="height:28px;padding:0 10px;font-size:12.5px"><i class="ph ph-check"></i>标为已读</button>`) : ''}</div></div>`; };
+  const imp = NEWS.filter(x => x.level !== '一般');
+  $('#newsTop').innerHTML = imp.length ? imp.slice(0, 4).map(row).join('') : `<div class="empty">暂时没有重要动态</div>`;
+  const unread = NEWS.filter(x => x.level === '重要' && !rd[nid(x)]);
+  $('#newsAll').innerHTML = (unread.length ? `<div style="display:flex;justify-content:flex-end"><button class="btn" id="readAll" style="height:30px;font-size:13px"><i class="ph ph-checks"></i>重要的全部标为已读</button></div>` : '') + (NEWS.length ? NEWS.map(row).join('') : `<div class="empty">暂无动态</div>`);
+  $('#newsCount').textContent = `${NEWS.length} 条`;
+  $('#tbNews').textContent = unread.length || '';
+}
+async function loadReview() {
+  const r = await get('/api/outcomes').catch(e => ({ error: e.message }));
+  if (!r.list) { $('#review').innerHTML = `<tr><td class="muted" style="padding:14px">${esc(r.error || '加载中，首次约 2 分钟')}</td></tr>`; return; }
+  const cur = (v, c) => v == null ? '<span class="muted">-</span>' : `${fmt(v, v < 1 ? 4 : 2)} ${esc(c || '')}`;
+  const costS = c => !c ? '-' : Object.entries(c).filter(([, v]) => v > 0).map(([k, v]) => `${fmt(v, 4)} ${esc(k)}`).join(' + ') || '0';
+  // 总账：成本按 BNB / USDT 折美元；估值只算有市场价的
+  { const cU = c => !c ? 0 : c.currency ? (c.currency === 'USDT' ? c.amount : c.currency === 'BNB' && BNB_USD ? c.amount * BNB_USD : 0) : (c.USDT || 0) + (c.BNB && BNB_USD ? c.BNB * BNB_USD : 0);
+    const cost = r.list.reduce((t, x) => t + cU(x.cost), 0);
+    const priced = r.list.filter(x => x.value != null && isFinite(x.value));
+    const val = priced.reduce((t, x) => t + (toUsd(x.value, x.currency) || 0), 0);
+    const costPriced = priced.reduce((t, x) => t + cU(x.cost), 0);
+    const k = (t, v, sub) => `<div class="kpi"><div class="k">${t}</div><div class="v num">${v}</div><div class="s">${sub}</div></div>`;
+    $('#revSum').innerHTML = k('打过的系列', r.list.length, `持有 ${r.list.reduce((t, x) => t + (x.held || 0), 0)} 件`)
+      + k('总成本', usd(cost), BNB_USD ? '付费部分，按当前 BNB 价折算' : '等 BNB 价格加载')
+      + k('有市场价的估值', usd(val), `${priced.length} 个系列有报价，成本 ${usd(costPriced)}`)
+      + k('有市场价部分盈亏', `<span style="color:${val - costPriced >= 0 ? 'var(--good)' : 'var(--bad)'}">${val - costPriced >= 0 ? '+' : ''}${usd(val - costPriced)}</span>`, '没有市场的按 0 不计入')
+      + k('信号', `${r.list.filter(x => x.market).length} / ${r.list.filter(x => x.suspectMarket).length} / ${r.list.filter(x => x.airdrop).length}`, '已开市场 / 疑似开市场 / 有空投'); }
+  const rows = r.list.slice().sort((a, b) => (b.market ? 1 : 0) - (a.market ? 1 : 0) || (b.suspectMarket ? 1 : 0) - (a.suspectMarket ? 1 : 0));
+  $('#revCount').textContent = `${rows.filter(x => x.market).length} 个有市场 / ${rows.length}`;
+  $('#review').innerHTML = `<tr><th>项目</th><th>持有</th><th>成本</th><th>市场</th><th>地板 / 在挂</th><th>估值</th><th>铸造进度</th><th>信号</th></tr>` + rows.map(x => `<tr>
+    <td><b>${esc(x.name)}</b></td><td class="num">${x.held ?? '-'}</td><td class="num">${costS(x.cost)}</td>
+    <td>${x.market ? '<span class="ok">已接入</span>' : '<span class="muted">未开</span>'}</td>
+    <td class="num">${x.market ? cur(x.floor, x.currency) + (x.listed != null ? ` <span class="muted">/ ${x.listed}</span>` : '') : '-'}</td>
+    <td class="num">${cur(x.value, x.currency)}</td>
+    <td class="num">${x.supply?.minted ? `${fmt(x.supply.minted, 0)}${x.supply.max ? ' / ' + fmt(x.supply.max, 0) : ''}` : '-'}</td>
+    <td>${x.suspectMarket ? `<span class="warn"><i class="ph ph-bell"></i>${x.suspectMarket.holders} 个持有者授权给 ${esc(x.suspectMarket.op.slice(0, 6))}…${esc(x.suspectMarket.op.slice(-4))}，可能开了市场</span>` : ''}${x.airdrop ? `<span class="ok">空投：${esc(x.airdrop)}</span>` : ''}${x.note ? `<span class="muted">${esc(x.note)}</span>` : ''}</td></tr>`).join('');
+}
+async function loadNews() { NEWS = await get('/api/news').catch(() => []); renderNews(); }
+document.addEventListener('click', e => {
+  const m = e.target.closest('.markread');
+  if (m) { const r = getRead(); r[m.dataset.id] = Date.now(); setRead(r); renderNews(); toast('已标为已读'); return; }
+  if (e.target.closest('#readAll')) { const r = getRead(); NEWS.filter(x => x.level === '重要').forEach(x => r[nid(x)] = Date.now()); setRead(r); renderNews(); toast('重要动态已全部标为已读'); }
+});
+
+// ---------- 分页 ----------
+let VIEW = 'overview';
+try { VIEW = localStorage.getItem('lh-view') || 'overview'; } catch {}
+function showView(v) {
+  VIEW = v; try { localStorage.setItem('lh-view', v); } catch {}
+  document.querySelectorAll('.view').forEach(el => el.classList.toggle('on', el.dataset.view === v));
+  document.querySelectorAll('#viewTabs button').forEach(b => b.classList.toggle('act', b.dataset.v === v));
+}
+document.getElementById('viewTabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { showView(b.dataset.v); window.scrollTo({ top: 0, behavior: 'smooth' }); } });
+document.getElementById('kPendBox').addEventListener('click', e => { e.preventDefault(); showView('overview'); document.getElementById('pendingSec').scrollIntoView({ behavior: 'smooth' }); });
+showView(VIEW);
+
+async function all() {
+  const b = $('#refresh'); b.classList.add('spin');
+  await loadOverview();
+  await loadProjects(); await Promise.allSettled([loadReview(), loadNews(), loadNfts(), loadEvents(), loadRadar(), loadPositions()]);
+  b.classList.remove('spin');
+}
+$('#refresh').onclick = () => all().then(() => toast('已刷新'));
+renderNfts(); all();
+setInterval(loadOverview, 60000);
+setInterval(() => { loadProjects(); loadEvents(); loadRadar(); loadNews(); }, 30000);
+setInterval(loadPositions, 120000);
+setInterval(loadReview, 300000);
+</script>
+</body>
+</html>
