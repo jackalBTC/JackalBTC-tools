@@ -6,6 +6,13 @@ What changed in each version, newest first. To upgrade: `git pull` in the repo, 
 
 ---
 
+## v0.3.2 — 2026-10-30 · Small fix
+
+### Improved
+- The dashboard wallet drop-down refreshes every 30 s: after renaming a wallet (`label` in `wallets.json`) or adding one, it shows up without reloading the page.
+
+---
+
 ## v0.3.1 — 2026-10-30 · Mint stats
 
 ### Improved

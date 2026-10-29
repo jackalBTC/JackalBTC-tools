@@ -791,7 +791,7 @@ $('#walletSel').addEventListener('change', e => {
 });
 renderNfts(); loadWallets().then(all);
 setInterval(loadOverview, 60000);
-setInterval(() => { loadProjects(); loadEvents(); loadRadar(); loadNews(); }, 30000);
+setInterval(() => { loadProjects(); loadEvents(); loadRadar(); loadNews(); loadWallets(); }, 30000);   // 钱包改名 / 新加钱包也会自动出现
 setInterval(loadPositions, 60000);
 setInterval(loadRealized, 60000);
 setInterval(loadReview, 300000);
