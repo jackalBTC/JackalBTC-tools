@@ -38,7 +38,8 @@ function snapshot(key, fn, every) {
     const file = path.join(config.dataDir, `.snap-${key}.json`);
     s = { v: null, p: null, err: null };
     try { s.v = { ...JSON.parse(fs.readFileSync(file, 'utf8')), stale: true }; } catch {}
-    const run = () => { s.p = fn().then(v => { s.v = v; s.err = null; try { fs.writeFileSync(file, JSON.stringify(v)); } catch {} }).catch(e => { s.err = String(e.message || e); }).finally(() => { s.p = null; }); return s.p; };
+    const run = () => { s.p = fn().then(v => { s.v = v; s.err = null; try { fs.writeFileSync(file, JSON.stringify(v)); } catch {} }).catch(e => { s.err = String(e.message || e); }).finally(() => { s.p = null; if (s.dirty) { s.dirty = false; run(); } }); return s.p; };
+    s.kick = () => { if (s.p) s.dirty = true; else run(); };   // 持仓清单改了：马上重算（正在算就算完再来一轮）
     run(); setInterval(() => { if (!s.p) run(); }, every);
     snaps.set(key, s);
   }
@@ -135,6 +136,19 @@ async function positions() {
       currency: c.market?.currency || null, marketType: c.market?.type || 'none', cost: c.cost || null,
       ...mk, heldByRarity, value, supply: await supplyOf(c) });
   }
+  // 打到的代币（watch.json 的 tokens）：链上读余额，DexScreener 有交易池就算开盘（取流动性最大的池子报价）
+  for (const t of watch().tokens || []) {
+    const [b, d] = await batch([[t.contract, '0x' + sel('balanceOf(address)') + word(W)], [t.contract, '0x' + sel('decimals()')]]);
+    const held = Number(big(b)) / 10 ** (Number(big(d)) || 18);
+    const mk = await cached('dex:' + t.contract, 600e3, async () => {
+      const j = await (await fetch('https://api.dexscreener.com/latest/dex/tokens/' + t.contract, { signal: AbortSignal.timeout(20000) })).json();
+      const p = (j.pairs || []).filter(x => x.chainId === 'bsc' && +x.priceUsd > 0).sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+      return p ? { floor: +p.priceUsd, liquidity: p.liquidity?.usd ?? null, url: /^https:\/\/dexscreener\.com\//.test(p.url) ? p.url : null } : {};
+    }).catch(() => ({}));
+    list.push({ id: t.id, name: t.name, symbol: t.symbol, contract: t.contract, kind: 'token', held, cost: t.cost || null,
+      marketType: mk.floor != null ? 'dex' : 'none', currency: 'USD', floor: mk.floor ?? null, liquidity: mk.liquidity ?? null,
+      url: mk.url || null, value: mk.floor != null ? mk.floor * held : null, note: mk.floor != null ? null : '还没开盘（没有交易池）' });
+  }
   return { positions: list, at: Date.now() };
 }
 
@@ -188,6 +202,7 @@ http.createServer(async (req, res) => {
     switch (url.pathname) {
       case '/api/overview': return json(await cached('ov', 30e3, overview));
       case '/api/nfts': return json(await snapshot('nfts', nfts, 5 * 60e3));
+      case '/api/realized': return json({ list: readJson('realized.json', []) });
       case '/api/positions': return json(await snapshot('pos', positions, 5 * 60e3));
       case '/api/outcomes': return json(await snapshot('out', outcomes, 30 * 60e3));
       case '/api/radar': return json(await cached('radar', 15e3, radar));
@@ -217,5 +232,7 @@ http.createServer(async (req, res) => {
 }).listen(PORT, HOST, () => {
   console.log(`看板已启动：http://${HOST}:${PORT}`);
   snapshot('nfts', nfts, 5 * 60e3); snapshot('pos', positions, 5 * 60e3);
+  // watch.json（持仓清单）一改就立刻刷新持仓，不用等 5 分钟的定时
+  fs.watchFile(path.join(config.dataDir, 'watch.json'), { interval: 3000 }, () => { snaps.get('nfts')?.kick(); snaps.get('pos')?.kick(); });
   setTimeout(() => snapshot('out', outcomes, 30 * 60e3), 90e3);
 });

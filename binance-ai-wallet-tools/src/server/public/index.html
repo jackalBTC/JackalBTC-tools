@@ -49,7 +49,7 @@ nav .in{max-width:none;margin:0;padding:0 28px;height:70px;display:flex;align-it
 .muted{color:var(--text-3);font-size:13px}
 .accent{color:var(--accent)}
 
-.hero{display:grid;grid-template-columns:1.4fr 1fr;gap:20px;margin-top:30px}
+.hero{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:20px;margin-top:30px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px 26px}
 .label{font-size:14.5px;color:var(--text-2);display:flex;align-items:center;gap:8px}
 .label i{font-size:18px;color:var(--text-3)}
@@ -331,6 +331,12 @@ table.rev .warn{color:var(--warn,#d98a00)} table.rev .ok{color:var(--good,#1a9a5
       <div id="collectMetrics"></div>
       <div class="pager mini" id="collectPager"></div>
     </div>
+    <div class="card feature reveal">
+      <div class="label"><i class="ph ph-scales"></i>盈亏台账</div>
+      <div class="big2 num" id="pnlBig"><span class="sk" style="display:inline-block;width:150px;height:30px"></span></div>
+      <div class="muted" id="pnlNote">已实现 + 持仓浮动</div>
+      <div style="margin-top:14px" id="pnlMetrics"></div>
+    </div>
   </div>
 
   <section class="reveal view" data-view="overview" id="pendingSec">
@@ -406,7 +412,7 @@ const safeUrl = u => /^https?:\/\/[^\s"'<>]+$/i.test(String(u || '')) ? esc(u) :
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const PALETTE = ['var(--accent)', '#8a9099', '#5d636b', '#3f444b', '#2c3036'];
 const xUrl = h => { const n = (String(h || '').replace(/^@/, '').match(/^[A-Za-z0-9_]{1,15}/) || [])[0]; return n ? 'https://x.com/' + n : '#'; };
-let BNB_USD = null, PROJECTS = [];
+let BNB_USD = null, PROJECTS = [], OVT = new Set(), REAL = null;
 function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1600); }
 async function get(u) { const r = await fetch(u); const j = await r.json(); if (!r.ok || j.error) throw new Error(j.error || r.status); return j; }
 const ts = t => new Date(t).toLocaleString('zh-CN', { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -422,7 +428,7 @@ async function loadOverview() {
     const total = known.reduce((s, t) => s + (t.value || 0), 0);
     const bnb = o.tokens.find(t => t.symbol === 'BNB'); BNB_USD = bnb ? bnb.price : BNB_USD;
     $('#cardTotal .total').innerHTML = `${usd(total)}<small>USD</small>`;
-    KP.tokens = total; renderKpi();
+    KP.tokens = total; renderKpi(); OVT = new Set(o.tokens.map(t => String(t.address).toLowerCase())); renderPnl();
     $('#bars').innerHTML = known.map((t, i) => `<span style="width:${total ? Math.max(2, t.value / total * 100) : 0}%;background:${PALETTE[i % 5]}"></span>`).join('');
     $('#tokList').innerHTML = known.map((t, i) => `<span class="sw" style="background:${PALETTE[i % 5]}"></span><span>${esc(t.symbol)}</span><span class="v num">${usd(t.value)}</span>
       <span class="sub num">${fmt(t.balance, t.balance > 1000 ? 0 : 4)} × $${t.price < 0.01 ? t.price.toPrecision(3) : fmt(t.price, 4)}</span>`).join('')
@@ -440,26 +446,47 @@ async function loadOverview() {
 
 
 // ---------- 总览条 ----------
-const KP = { tokens: null, nft: null };
+const KP = { tokens: null, nft: null, newTok: 0 };
 function renderKpi() {
   if (KP.nft != null) { $('#kNft').textContent = usd(KP.nft.usd); $('#kNftS').textContent = `${KP.nft.count} 件 · 按稀有度地板价`; }
   if (KP.tokens != null && KP.nft != null) {
-    const t = KP.tokens + KP.nft.usd;
+    const t = KP.tokens + (KP.newTok || 0) + KP.nft.usd;
     $('#kTotal').textContent = usd(t);
-    $('#kTotalS').textContent = `代币 ${usd(KP.tokens)} · NFT ${usd(KP.nft.usd)}`;
+    $('#kTotalS').textContent = `代币 ${usd(KP.tokens + (KP.newTok || 0))} · NFT ${usd(KP.nft.usd)}`;
   }
 }
+// ---------- 盈亏台账 ----------
+// 已实现：data/realized.json（每次卖出记一条 { ts, project, name, cost: {USDT|BNB}, proceeds: {USDT|BNB} }）；持仓浮动：有成本又有报价的持仓
+const inUsd = c => { if (!c) return null; let s = 0; for (const [u, v] of Object.entries(c)) { if (!v) continue; if (u === 'USDT' || u === 'USD') s += v; else if (u === 'BNB' && BNB_USD) s += v * BNB_USD; else return null; } return s; };
+async function loadRealized() { try { REAL = (await get('/api/realized')).list || []; renderPnl(); } catch {} }
+function renderPnl() {
+  if (!REAL || !POSD || !BNB_USD) return;
+  let real = 0; for (const r of REAL) { const g = inUsd(r.proceeds); if (g != null) real += g - (inUsd(r.cost) ?? 0); }
+  let fl = 0, n = 0, wait = 0, wn = 0;
+  for (const p of POSD.positions) {
+    const c = inUsd(p.cost), v = p.value != null && isFinite(p.value) && p.value < 1e9 ? toUsd(p.value, p.currency) : null;
+    if (c != null && v != null) { fl += v - c; n++; } else if (c) { wait += c; wn++; }
+  }
+  const tot = real + fl, sg = x => `<b class="num ${x >= 0 ? 'accent' : 'err'}">${x >= 0 ? '+' : ''}${usd(x)}</b>`;
+  $('#pnlBig').innerHTML = `${tot >= 0 ? '+' : ''}${usd(tot)}`;
+  $('#pnlNote').textContent = `已实现 + 持仓浮动（BNB 按现价 $${fmt(BNB_USD, 0)} 折算）`;
+  const grp = {}; for (const r of REAL) { const g = grp[r.project] ||= { n: 0, pl: 0 }; g.n++; g.pl += (inUsd(r.proceeds) ?? 0) - (inUsd(r.cost) ?? 0); }   // 同一项目的多笔卖出合并成一行
+  const top = Object.entries(grp).sort((a, b) => b[1].pl - a[1].pl).slice(0, 4).map(([id, g]) => ({ name: (PROJECTS.find(p => p.id === id) || {}).name || id, n: g.n, pl: g.pl }));
+  $('#pnlMetrics').innerHTML = [['已实现', `${sg(real)}<span class="muted"> · ${REAL.length} 笔卖出</span>`], ['持仓浮动', `${sg(fl)}<span class="muted"> · ${n} 项有报价</span>`],
+    ['等开盘', `<b class="num">${usd(wait)}</b><span class="muted"> · ${wn} 项已花钱、还没报价，未计盈亏</span>`],
+    ...top.map(r => [esc(r.name) + (r.n > 1 ? `<span class="muted"> · ${r.n} 笔</span>` : ''), sg(r.pl)])].map(([k, v]) => `<div class="metric"><span>${k}</span><span>${v}</span></div>`).join('');
+}
 // ---------- 持仓与市场 ----------
-const toUsd = (amt, cur) => amt == null ? null : cur === 'USDT' ? amt : cur === 'BNB' && BNB_USD ? amt * BNB_USD : null;
+const toUsd = (amt, cur) => amt == null ? null : cur === 'USDT' || cur === 'USD' ? amt : cur === 'BNB' && BNB_USD ? amt * BNB_USD : null;
 const costUsd = c => c ? (c.USDT || 0) + (c.BNB ? (BNB_USD ? c.BNB * BNB_USD : NaN) : 0) : null;
 const costTxt = c => !c ? '未统计' : Object.entries(c).filter(([, v]) => v > 0).map(([u, v]) => `${fmt(v, u === 'BNB' ? 5 : 2)} ${esc(u)}`).join(' + ') || '0（仅 gas）';
 async function loadPositions(retry = 0) {
   if (!$('#positions').children.length) $('#positions').innerHTML = Array.from({ length: 4 }, () => `<div class="card pc"><div class="sk" style="width:60%;height:16px"></div><div class="sk" style="width:30%;height:26px;margin:14px 0"></div><div class="sk" style="height:10px;margin:8px 0"></div><div class="sk" style="height:10px;margin:8px 0"></div><div class="muted" style="margin-top:12px">正在读取链上市场数据，服务刚重启时第一次约需 1 分钟…</div></div>`).join('');
   try {
     const d = await get('/api/positions'); POSD = d;
-    $('#posNote').textContent = `后台每 5 分钟刷新`;
-    { let u = 0, c = 0; for (const p of d.positions) { c += p.held; const v = p.value != null && isFinite(p.value) && p.value < 1e9 ? toUsd(p.value, p.currency) : null; if (v) u += v; } KP.nft = { usd: u, count: c }; renderKpi(); }
-    renderPositions();
+    $('#posNote').textContent = `持仓清单一改就刷新，价格每 5 分钟刷新`;
+    { let u = 0, c = 0, tk = 0; for (const p of d.positions) { if (p.kind === 'token') { if (!OVT.has(String(p.contract).toLowerCase()) && p.value) tk += p.value; continue; } c += p.held; const v = p.value != null && isFinite(p.value) && p.value < 1e9 ? toUsd(p.value, p.currency) : null; if (v) u += v; } KP.nft = { usd: u, count: c }; KP.newTok = tk; renderKpi(); }
+    renderPositions(); renderPnl();
   } catch (e) { if (retry < 3) { setTimeout(() => loadPositions(retry + 1), 15000); return; } $('#positions').innerHTML = `<div class="empty err"><i class="ph ph-warning"></i>市场数据读取失败：${esc(e.message)}，稍后会自动重试</div>`; }
 }
 let POSD = null, POSF = 'open';
@@ -475,11 +502,11 @@ function renderPositions() {
   {
     $('#positions').innerHTML = list.map(p => {
       const sane = v => v != null && isFinite(v) && v < 1e9 ? v : null;
-      const price = sane(p.floor), kind = p.floor != null ? '地板价' : null;
-      const dec = p.currency === 'BNB' ? 5 : 2;
+      const price = sane(p.floor), kind = p.kind === 'token' ? (p.floor != null ? '现价' : null) : p.floor != null ? '地板价' : null;
+      const dec = p.kind === 'token' ? (price != null && price < 1 ? Math.min(12, 3 - Math.floor(Math.log10(price))) : 4) : p.currency === 'BNB' ? 5 : 2;
       const val = sane(p.value) != null ? toUsd(p.value, p.currency) : null, cu = costUsd(p.cost);
       const pnl = val != null && cu != null && !isNaN(cu) ? val - cu : null;
-      const mk = p.marketType === 'none' ? `<span class="mk">暂无市场</span>` : p.marketType === 'link' ? `<span class="mk">外部市场</span>` : `<span class="mk live">链上市场</span>`;
+      const mk = p.kind === 'token' ? (p.marketType === 'dex' ? `<span class="mk live">已开盘</span>` : `<span class="mk">未开盘</span>`) : p.marketType === 'none' ? `<span class="mk">暂无市场</span>` : p.marketType === 'link' ? `<span class="mk">外部市场</span>` : `<span class="mk live">链上市场</span>`;
       const held = p.heldByRarity || {}, rar = Object.keys(held);
       const order = r => RANK[r] ?? 9;
       const rarRows = p.byRarity && rar.length ? rar.sort((a, b) => order(a) - order(b)).map(r => {
@@ -489,12 +516,12 @@ function renderPositions() {
       }) : [];
       const rows = [
         ['成本', `<b class="num">${costTxt(p.cost)}</b>`],
-        [kind ? (p.byRarity && rar.length ? '整体' + kind : kind) : '市场价', price != null ? `<b class="num">${fmt(price, dec)} ${esc(p.currency)}</b>${p.listed != null ? `<span class="muted"> · 在售 ${p.listed}</span>` : ''}` : `<span class="muted">${p.listed === 0 ? '市场已开，暂无挂单' : esc(p.note || '暂无报价')}</span>`],
+        [kind ? (p.byRarity && rar.length ? '整体' + kind : kind) : '市场价', price != null ? `<b class="num">${fmt(price, dec)} ${esc(p.currency)}</b>${p.listed != null ? `<span class="muted"> · 在售 ${p.listed}</span>` : ''}${p.liquidity != null ? `<span class="muted"> · 池子 ${usd(p.liquidity)}</span>` : ''}` : `<span class="muted">${p.listed === 0 ? '市场已开，暂无挂单' : esc(p.note || '暂无报价')}</span>`],
         ...rarRows,
         [rarRows.length ? '按稀有度估值' : '估算市值', val != null ? `<b class="num">${usd(val)}</b>` : '<span class="muted">-</span>'],
       ];
       return `<article class="card pc"><div class="top"><div class="nm">${esc(p.name)}</div>${mk}</div>
-        <div class="held num">${p.held}<small>张</small></div>
+        <div class="held num">${p.kind === 'token' ? fmt(p.held, 0) : p.held}<small>${p.kind === 'token' ? esc(p.symbol || '枚') : '张'}</small></div>
         ${pnl != null ? `<span class="pl ${pnl >= 0 ? 'up' : 'down'} num">${rarRows.length ? '按稀有度估算' : '按' + kind + '估算'} ${pnl >= 0 ? '+' : ''}${usd(pnl)}</span>` : ''}
         ${p.supply && p.supply.minted != null ? (() => { const m = p.supply.minted, x = p.supply.max, pct = x ? Math.min(100, m / x * 100) : null, done = x && m >= x;
           return `<div class="prog"><div class="pr-top"><span>铸造进度</span><span class="num">${fmt(m, 0)}${x ? ' / ' + fmt(x, 0) : ''}${pct != null ? `<b class="${done ? '' : 'accent'}"> ${done ? '已铸完' : fmt(pct, 1) + '%'}</b>` : ''}</span></div>${pct != null ? `<div class="gauge"><span style="width:${pct}%;${done ? 'background:var(--text-3)' : ''}"></span></div>` : ''}</div>`; })() : ''}
@@ -733,14 +760,15 @@ showView(VIEW);
 async function all() {
   const b = $('#refresh'); b.classList.add('spin');
   await loadOverview();
-  await loadProjects(); await Promise.allSettled([loadReview(), loadNews(), loadNfts(), loadEvents(), loadRadar(), loadPositions()]);
+  await loadProjects(); await Promise.allSettled([loadReview(), loadNews(), loadNfts(), loadEvents(), loadRadar(), loadPositions(), loadRealized()]);
   b.classList.remove('spin');
 }
 $('#refresh').onclick = () => all().then(() => toast('已刷新'));
 renderNfts(); all();
 setInterval(loadOverview, 60000);
 setInterval(() => { loadProjects(); loadEvents(); loadRadar(); loadNews(); }, 30000);
-setInterval(loadPositions, 120000);
+setInterval(loadPositions, 60000);
+setInterval(loadRealized, 60000);
 setInterval(loadReview, 300000);
 </script>
 </body>

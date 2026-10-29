@@ -101,7 +101,7 @@ const src = await sourcifyAbi(to);
 const verified = src.match;
 const fromAbi = pickQuoteFromAbi(src.abi);
 const GUESS = ['quote(address,uint256)', 'quoteMint(address,uint256)', 'priceFor(address,uint256)', 'quoteBnbFor(address,uint256)', 'quoteFor(address,uint256)'];
-const UNIT = ['PRICE()', 'price()', 'mintPrice()', 'MINT_PRICE()', 'cost()', 'mintFee()'];
+const UNIT = ['priceFor(address)', 'PRICE()', 'price()', 'mintPrice()', 'MINT_PRICE()', 'publicPrice()', 'cost()', 'mintFee()'];   // priceFor(address)：按本钱包报单价
 let quoteSig = null;
 async function totalOf(q) {
   if (q <= free) return 0n;
@@ -119,7 +119,7 @@ async function totalOf(q) {
     return w.length > 1 && /^(quote|quoteMint)\(/.test(sig) && w[0] < 1000000n ? w[w.length - 1] : w[0];
   }
   for (const sig of UNIT) {
-    const r = await ethCall({ from: W, to, data: '0x' + sel(sig) });
+    const r = await ethCall({ from: W, to, data: '0x' + sel(sig) + (sig.includes('(address)') ? word(W) : '') });
     if (r.ok && r.ok.length >= 66) { quoteSig = sig + ' × 付费张数'; return BigInt(r.ok.slice(0, 66)) * BigInt(q - free); }
   }
   return null;

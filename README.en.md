@@ -173,8 +173,8 @@ Runs on your machine only and is read-only: no signing, no transactions, no stor
 
 | Page | Contents |
 |---|---|
-| **Overview** | Asset value (tokens + NFTs at rarity-aware floor), mints today, project cards waiting for you (collapsible, can be dismissed until the radar sees them again), important project updates, gas balance and alert line, collections (paged) |
-| **Holdings & market** | Per collection: units held, cost, floor price, rarity-aware value and P&L, mint progress; tabs "market open / not open / all" |
+| **Overview** | Asset value (tokens + NFTs at rarity-aware floor), mints today, project cards waiting for you (collapsible, can be dismissed until the radar sees them again), important project updates, gas balance and alert line, collections (paged), P&L card (realized + unrealized; several sales of one project merged into one row; money spent on things without a price yet shown separately as "awaiting market") |
+| **Holdings & market** | Per NFT collection: units held, cost, floor price, rarity-aware value and P&L, mint progress. Tokens you bought are listed too (balance read on-chain; once DexScreener sees a pool they show price and P&L, before that "not launched"). Tabs "market open / not open / all". Recomputed as soon as the holdings file changes; the page refreshes every minute |
 | **X radar** | Running status, spend, recent leads (marked minted / waiting / unhandled), radar log |
 | **Project updates** | Chinese summaries for joined projects, rated important / opportunity / caution / general; important ones can be marked read |
 | **Collection** | Your NFTs with image, id, rarity and traits |
@@ -300,7 +300,8 @@ All in `data/`, yours only, never committed:
 | File | Contents |
 |---|---|
 | `projects.json` | Project ledger: rating, status, official site and account, contracts, project card, outcome |
-| `watch.json` | Holdings: contracts, token ids, cost, market config (maintained by mint) |
+| `watch.json` | Holdings: `collections` (NFTs: contracts, token ids, cost, market config, maintained by mint) and `tokens` (`{ id, name, symbol, contract, cost: { BNB or USDT } }`, added by the AI when it buys a token) |
+| `realized.json` | Realized P&L: one entry per sale `{ ts, project, name, cost: {…}, proceeds: {…}, tx? }`; the dashboard's P&L card is computed from it |
 | `events.jsonl` | Every logged step (append-only) |
 | `spend.jsonl` | Spending ledger (daily and per-project caps are computed from it) |
 | `news.json` | Chinese update summaries for joined projects |

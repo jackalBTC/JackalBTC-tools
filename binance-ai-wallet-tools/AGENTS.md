@@ -34,4 +34,4 @@
 ## 数据
 用户配置了 Telegram 机器人（`npm run telegram` / 后台服务）时，`events.jsonl` 里的铸造成功、`brief`、`abort`，以及 `news.json` 里新增的项目动态会被推到用户手机，所以写这些内容时要像直接发给用户的消息一样清楚准确。
 
-`data/` 下：`projects.json`（台账）、`watch.json`（持仓系列）、`events.jsonl`（日志）、`spend.jsonl`（花费账本）、`news.json`（官推动态）、`watch-accounts.json`（跟踪的官推）、`radar-*.json(l)`（雷达状态）。看板 `npm run dashboard` 只读这些文件。
+`data/` 下：`projects.json`（台账）、`watch.json`（持仓：`collections` 是 NFT 系列，`tokens` 是花钱换到的代币——**用户让你买币 / 参与发射后，把代币加进 `tokens` 并写上成本**）、`realized.json`（已实现盈亏——**每次卖出后追加一条 `{ ts, project, name, cost, proceeds, tx }`**）、`events.jsonl`（日志）、`spend.jsonl`（花费账本）、`news.json`（官推动态）、`watch-accounts.json`（跟踪的官推）、`radar-*.json(l)`（雷达状态）。看板 `npm run dashboard` 只读这些文件。
