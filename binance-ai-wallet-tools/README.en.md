@@ -31,7 +31,7 @@ A "launch hunting" toolkit that runs on your own computer. It works with the **B
 | [Node.js](https://nodejs.org) 20+ | |
 | AI coding agent (optional) | [Claude Code](https://claude.com/claude-code), OpenAI Codex or any tool that reads `AGENTS.md`; the toolkit also works by hand |
 | **AI Wallet** in the Binance app | Claim a `.ai` Agent ID, turn on **Developer Mode**, and keep a little BNB for gas |
-| Telegram bot (optional) | For phone alerts – create one with @BotFather, see [docs/telegram.md](docs/telegram.md) |
+| Telegram bot (optional) | For phone alerts – create one with @BotFather, see [docs/telegram.en.md](docs/telegram.en.md) |
 | X data source key (pick one) | [twitterapi.io](https://twitterapi.io) or [xAI Grok API](https://console.x.ai) – sign-up steps in [docs/providers.md](docs/providers.md) |
 
 ## Install in three steps
@@ -65,7 +65,7 @@ Claude follows the radar log: free projects that pass verification are minted au
 
 Prefer not to run in the background? Run them by hand: `npm run dashboard`, `npm run radar`.
 
-Alerts on your phone: set up the Telegram bot in `npm run setup` (about 2 minutes), see [docs/telegram.md](docs/telegram.md) (Chinese). The bot is read-only and only answers your own chat.
+Alerts on your phone: set up the Telegram bot in `npm run setup` (about 2 minutes), see [docs/telegram.en.md](docs/telegram.en.md). The bot is read-only and only answers your own chat.
 
 Fully unattended (no chat window open): enable `agent` in `config/config.json`; the radar then calls the AI command line you specify for each lead. Read [docs/agents.md](docs/agents.md) first.
 
@@ -96,7 +96,7 @@ src/server/                              local read-only dashboard
 src/telegram/                            Telegram bot (alerts + read-only queries)
 scripts/                                 setup, service (background), check (pre-publish privacy scan)
 data/  logs/                             your ledger and logs (not committed)
-docs/                                    data sources, markets, agents, Telegram, security model
+docs/                                    data sources, markets, agents, Telegram (zh / en), security model
 ```
 
 ## FAQ
@@ -106,6 +106,8 @@ docs/                                    data sources, markets, agents, Telegram
 **The project is on an external drive and the background service won't start?** macOS doesn't let background services read or write external drives by default. Add `node` under System Settings → Privacy & Security → Full Disk Access (`npm run service install` prints the exact path), or move the project into your home folder.
 
 **The wallet keeps disconnecting?** An AI Wallet allows one signed-in session at a time; signing in on the web or in another tool kicks this one out – just run `baw auth signin` again. The radar checks every round: `ERR NOTCONNECTED` when signed out, `ERR DEVMODE` when Developer Mode is off or expires within 48 hours.
+
+**Not receiving Telegram messages?** Run `npm run doctor` and check the Telegram line; make sure you messaged the bot and finished pairing (your id is in `telegram.chatIds` of `config/config.json`); if running in the background, check `npm run service status` lists `telegram`. If `/status` gets a reply, it works. See [docs/telegram.en.md](docs/telegram.en.md).
 
 **How do I show a project's floor price on the dashboard?** See [docs/markets.md](docs/markets.md).
 

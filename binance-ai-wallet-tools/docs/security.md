@@ -28,6 +28,14 @@
 - **软约束（靠 Claude 遵守规则）**：「有官网或官推」这一条读的是台账里的 `site` / `x`，台账由 Claude 填写。skill 要求只填核实过的官方来源，但这不是代码能证明的。所以真正兜底的是上面的金额上限——请按你能接受的损失来设置。
 - 项目自带的 `.claude/settings.json` 禁止 Claude 编辑 `config/config.json` 和读取密钥目录；Claude 仍有命令行权限，所以这同样是「防误操作」而不是「防恶意」。
 
+## Telegram 机器人（可选）
+- **只读**：机器人没有任何会花钱、发交易、改配置的命令。即使机器人 token 或你的 Telegram 账号泄露，别人也动不了钱包。
+- **只认绑定的聊天**：`telegram.chatIds` 以外的人给机器人发消息，它完全不回应。
+- **纯文本**：消息不解析 Markdown / HTML，推文里的内容变不成按钮或伪装链接；交易链接只在 txHash 格式正确时才拼。
+- **token 只在本机**：存在 `~/.config/binance-ai-wallet-tools/secrets.json`（600）或环境变量 `TELEGRAM_BOT_TOKEN`，不进仓库、不写日志，也不会传给无人值守模式调用的 AI。
+- **会经过 Telegram 的数据**：钱包余额、项目名、交易链接、项目动态摘要。介意的话在 `telegram.notify` 里只留 `MINT`、`LOWBNB`、`NOTCONNECTED`。
+- token 如果泄露（比如贴到了聊天里），在 @BotFather 发 `/revoke` 换一个，再 `npm run setup` 重新填。
+
 ## 你需要自己注意的
 - 「免费」NFT 也会花 gas，而且大多数没有交易市场，不保证有价值。这是一个降低踩坑概率的工具，**不是赚钱保证，不构成投资建议**。
 - 铸造时附赠的陌生代币不要去交易或授权。

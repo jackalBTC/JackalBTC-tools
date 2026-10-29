@@ -1,5 +1,7 @@
 # Telegram 机器人（可选）
 
+[English](telegram.en.md)
+
 关掉电脑上的 AI 对话窗口后，也能在手机上收到提醒、查状态。
 
 ## 它会做什么
@@ -34,4 +36,6 @@ token 和其他 Key 一样只存在 `~/.config/binance-ai-wallet-tools/secrets.j
 ## 注意
 - 推送内容会经过 Telegram 的服务器（包括钱包余额、项目名、交易链接）。介意的话只开 `MINT`、`LOWBNB`、`NOTCONNECTED` 这几类。
 - 同一分钟最多推 20 条，超出的会合并成一条「请看看板」。
+- 第一次启动时只记下已有的日志和动态，不补发历史。
+- token 如果泄露（比如贴到了聊天里），在 @BotFather 发 `/revoke` 换一个，再 `npm run setup` 重新填。
 - 想给多个人发（比如朋友一起看），把对方的聊天 id 加进 `telegram.chatIds`。群聊也可以：把机器人拉进群、在群里发条消息，再运行一次 setup 绑定群。

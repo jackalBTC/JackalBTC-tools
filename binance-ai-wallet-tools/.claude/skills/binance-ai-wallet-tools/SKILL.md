@@ -155,6 +155,7 @@ node src/cli/mint.mjs <项目id> <合约> <数量> [--fn "mint(uint256)"] [--arg
 - 收到 `UPDATE`：读推文，有实质内容（开市场、空投、新阶段、规则变化、风险）就写一条到 `data/news.json`：
   `{"ts":"ISO","project":"<id>","account":"@xxx","level":"重要|机会|注意|一般","title":"…","summary":"中文总结","action":"建议动作或无需操作","url":"原帖"}`；
   纯互动回复、重复宣传不写。
+  **用户配置了 Telegram 机器人时，「重要 / 机会 / 注意」三档会几秒内推到他手机上**（`telegram.newsLevels` 可改）：等级要定准——「重要」只给真正影响持仓或需要动作的事（开市场、快照、空投规则、风险）；纯进度播报用「一般」。`summary` 写成一两句能直接看懂的中文，不要粘原推文；`url` 只填 X 原帖链接。
 - 项目开了市场：在 `data/watch.json` 对应系列的 `market` 填 `{"type":"link","url":"…"}`，或按 `docs/markets.md` 配 `listing-scan` 让看板读地板价。
 - 有空投 / 重要结果：写到 `projects.json` 该项目的 `outcome`（`{"airdrop":"…","note":"…"}`），看板「复盘」页会显示。
 

@@ -96,7 +96,7 @@ src/server/                              本地只读看板
 src/telegram/                            Telegram 机器人（推送 + 只读查询）
 scripts/                                 setup、service（后台托管）、check（发布前隐私检查）
 data/  logs/                             你的台账、日志（不进 git）
-docs/                                    数据源、市场适配、AI 工具、Telegram、安全模型
+docs/                                    数据源、市场适配、AI 工具、Telegram（中 / 英）、安全模型
 ```
 
 ## 常见问题
@@ -106,6 +106,8 @@ docs/                                    数据源、市场适配、AI 工具、
 **项目放在外接硬盘上，后台服务起不来？** macOS 默认不允许后台服务读写外接盘。到「系统设置 → 隐私与安全性 → 完全磁盘访问权限」里加入 `node`（`npm run service install` 会打印具体路径），或者把项目放到用户目录下。
 
 **钱包老是掉线？** 同一个 AI 钱包同一时间只能有一个登录会话，在网页或其他工具登录会把这边挤掉，重新 `baw auth signin` 即可。雷达每轮会检查，掉线时日志里出现 `ERR NOTCONNECTED`；开发者模式关闭或 48 小时内到期会出现 `ERR DEVMODE`。
+
+**Telegram 收不到消息？** 先运行 `npm run doctor` 看 Telegram 一项；确认你给机器人发过消息并完成了绑定（`config/config.json` 的 `telegram.chatIds` 里有你的 id）；后台运行的话看 `npm run service status` 里有没有 `telegram`。给机器人发 `/status` 能回复就说明通了。详见 [docs/telegram.md](docs/telegram.md)。
 
 **怎么让看板显示某个项目的地板价？** 见 [docs/markets.md](docs/markets.md)。
 
