@@ -55,6 +55,7 @@ function score(t, ex) {
   if (ex.cas.length) { v += 2; why.push('有合约'); }
   if (/presale|预售|giveaway|抽奖|drop your wallet|tag 3/.test(s)) { v -= 4; why.push('拉人头 / 预售'); }
   if (/#myagentid|my agent id( is|:)|我的 ?agent ?id|i'm agent #/.test(s)) { v -= 6; why.push('晒身份的活动帖'); }
+  if (/i'm joining the @\w+ whitelist|\bcode: ?[a-z]{2,4}-[a-z0-9]{4,}|邀请码[:：]/.test(s)) { v -= 6; why.push('邀请码刷单帖'); }
   const f = t.author?.followers ?? 0; if (f >= 1000) { v += 1; why.push('粉丝≥1k'); }
   return { v, why };
 }
