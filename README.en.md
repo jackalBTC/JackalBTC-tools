@@ -1,6 +1,6 @@
 # Binance AI Wallet Tools (binance-ai-wallet-tools)
 
-[中文](README.md) · JackalBTC Tools · current version **v0.3.2** · [Changelog](CHANGELOG.en.md)
+[中文](README.md) · JackalBTC Tools · current version **v0.3.3** · [Changelog](CHANGELOG.en.md)
 
 > ⚠️ Deals with on-chain assets – **not financial advice**. Free mints only by default; read [Before you start](#before-you-start) and [Security design](#security-design) first.
 
@@ -8,6 +8,7 @@
 
 | Version | Date | Changes |
 |---|---|---|
+| **v0.3.3 Only what costs money** | 2026-10-31 | Telegram no longer pushes each free mint (see the nightly summary); new ringing "paid project brief" alert; `/holdings` `/pnl` |
 | **v0.3.2 Small fix** | 2026-10-30 | Wallet drop-down refreshes on its own after renaming or adding a wallet |
 | **v0.3.1 Mint stats** | 2026-10-30 | The "minted today" card also shows yesterday and the running total of projects and transactions |
 | **v0.3.0 Multiple wallets** | 2026-10-30 | Several Binance AI wallets signed in at once and a project minted wallet by wallet automatically (`npm run wallet add`, `npm run mint-all`); dashboard wallet switcher and per-wallet review; radar and Telegram per wallet; secondary wallets free-only by default; the daily spending cap is now optional and off by default (the AI asks whether you want one) |
@@ -207,11 +208,12 @@ Technical notes:
 
 - **Pushes** (choose types):
   - important updates from joined projects
-  - successful mints (with transaction link)
+  - successful paid mints (with transaction link and cost); free mints are not pushed one by one by default – see the 21:00 nightly summary (`freeMints: true` turns them on)
+  - paid project briefs (`PAID` lines in the radar log, with sound)
   - waiting for your decision, stopped by a safety check
   - low BNB, wallet signed out, Developer Mode expiring, radar errors
   - new leads / HOT (off by default – high volume)
-- **Commands** (read-only): `/status` wallet and balance, `/pending` projects waiting for you, `/today` today's mints, `/news` latest project updates, `/radar` recent leads, `/settings` alert settings.
+- **Commands** (read-only): `/status` wallet and balance, `/pending` projects waiting for you, `/today` today's mints, `/news` latest project updates, `/radar` recent leads, `/holdings` holdings, `/pnl` realized P&L, `/settings` alert settings; plain Chinese words (余额 / 持仓 / 战绩 / 今天) work too.
 - **Safety**:
   - cannot place orders, spend money or change settings;
   - only answers the chats you paired, ignores everyone else;
@@ -333,6 +335,7 @@ Then tell the AI "**start watching for new projects**". Free projects that pass 
 | | `ignoreDomains` / `ignoreCas` | common sites / public contracts | Never treated as project leads |
 | `telegram` | `chatIds` | `[]` | Paired chats (filled by the wizard) |
 | | `notify` / `newsLevels` | see template | Which alert types / which update levels to push |
+| | `freeMints` | `false` | Push every successful free mint |
 | `agent` | `enabled` / `command` | off | Unattended mode, see [docs/agents.md](binance-ai-wallet-tools/docs/agents.md) |
 | `dashboard` | `host` / `port` | `127.0.0.1` / `8790` | Dashboard address (local only) |
 

@@ -33,6 +33,7 @@
     "_radarLog": "留空 = logs/radar.log；雷达日志在别处时填路径",
     "notify": [
       "NEWS",
+      "PAID",
       "CANDIDATE",
       "HOT",
       "MINT",
@@ -43,6 +44,8 @@
       "DEVMODE",
       "ERR"
     ],
+    "freeMints": false,
+    "_freeMints": "false = 免费铸造成功不逐笔推送（每晚 21:00 总结里有）；true = 每笔都推",
     "newsLevels": [
       "重要",
       "机会",

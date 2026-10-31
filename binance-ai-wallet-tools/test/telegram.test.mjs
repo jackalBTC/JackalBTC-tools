@@ -9,6 +9,12 @@ test('雷达日志：新线索 → 带原帖链接的提醒', () => {
   assert.match(m.text, /新线索/);
   assert.match(m.text, /https:\/\/x\.com\/someone\/status\/123456789/);
 });
+test('雷达日志：付费项目简报 → PAID，每段一行', () => {
+  const m = parseRadarLine('2026/10/31 21:53:05 PAID ca:0x0000000000000000000000000000000000000001 Example Card：每张 0.002 BNB｜近 5000 块 120 个钱包铸造｜要求 Agent ID');
+  assert.equal(m.kind, 'PAID');
+  assert.match(m.text, /付费项目/);
+  assert.match(m.text, /每张 0\.002 BNB\n近 5000 块/);
+});
 test('雷达日志：钱包掉线 / BNB 不足 / 开发者模式 识别成各自类型', () => {
   assert.equal(parseRadarLine('2026/10/29 13:56:26 ERR NOTCONNECTED AI 钱包未登录').kind, 'NOTCONNECTED');
   assert.equal(parseRadarLine('2026/10/29 13:56:26 ERR LOWBNB 钱包 BNB 只剩 0.01').kind, 'LOWBNB');

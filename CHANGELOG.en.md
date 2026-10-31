@@ -6,6 +6,22 @@ What changed in each version, newest first. To upgrade: `git pull` in the repo, 
 
 ---
 
+## v0.3.3 — 2026-10-31 · Only what costs money
+
+### Improved
+- **Free mints are no longer pushed one by one**: free projects can produce hundreds of mints a day and drown out what matters. Instead a silent summary goes out every night at 21:00 (Beijing time): what was minted today, realized P&L and holdings. Set `telegram.freeMints: true` to get every one.
+- Successful paid mints are still pushed, with transaction link and cost.
+- Alerts are now loud or silent: waiting for you, paid project briefs, wallet signed out, low BNB, Developer Mode and "important" project updates ring; everything else is silent.
+- Projects marked `quiet: true` in the ledger are not pushed event by event.
+- Alerts show the project's real name instead of its internal id.
+
+### New
+- **Paid project brief**: `PAID` lines in the radar log (unit price, number of minters, whether an Agent ID is required, whether the contract is an upgradeable proxy, scam-check verdict, separated by `｜`) are pushed as "💸 paid project · waiting for you", with sound.
+- New commands `/holdings` (holdings and value) and `/pnl` (realized P&L), read from the local dashboard; plain Chinese words also work: 余额, 持仓, 战绩, 今天, 指令.
+- Messages older than 2 minutes (queued while the bot was restarting) are ignored.
+
+---
+
 ## v0.3.2 — 2026-10-30 · Small fix
 
 ### Improved
