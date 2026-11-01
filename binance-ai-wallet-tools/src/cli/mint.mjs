@@ -13,6 +13,7 @@
 //   - 免费张永远可以打；
 //   - 付费需要 allowAutoPaid=true，且源码已验证（Sourcify）+ 台账里有官网或官推 + 单张 ≤ maxUnitUsd；
 //   - 张数：这个钱包在这个合约的历史累计付费 ≤ maxPaidPerProject；金额：设了 maxDailyBnb 才看「当天所有钱包累计付费」（默认不设）。超出时自动减少付费张数，减到 0 就只打免费张；
+//   - 付费前先跑防骗检查（src/lib/devcheck.mjs：刷进度、诱饵盘、垃圾图、批量同款合约），有任何「拦」或检查没跑完，付费部分不打，只拿免费张；
 //   - 付费合计 ≤ gasLikeBnb 时视同 gas，不看单价 / 张数上限（仍受上面的开关、验证、官源约束，设了每日上限也算进去）；
 //   - 花费记在 data/spend.jsonl（只追加，多钱包时带 wallet 字段，没有的算主钱包），每日 / 每项目上限都按它算；同一时间只允许一个 mint 在跑（data/.mint.lock）。
 // 钱包会话：开头、预演前、执行前各核对一次「baw 当前登录的就是这个钱包」，对不上就停。
@@ -24,6 +25,7 @@ import { config, readJson, dataFile, DATA } from '../lib/config.mjs';
 import { calldata as cd, sel, word, rpc, ethCall, baw, waitReceipt, nftIdsReceived, bnbUsd, sourcifyAbi, agentIdOf } from '../lib/chain.mjs';
 import { checkPreview, planPaid, pickQuoteFromAbi } from '../lib/rules.mjs';
 import { backfill, sameCodeAs } from '../lib/clones.mjs';
+import { devCheck } from '../lib/devcheck.mjs';
 import { logEvent } from '../lib/events.mjs';
 import { getWallet, readWallets, readWatch, writeWatch, envFor, sessionOk, multiWallet } from '../lib/wallets.mjs';
 
@@ -148,7 +150,14 @@ await backfill(readWallets().flatMap(w => readWatch(w).collections || []).map(c 
 const twins = await sameCodeAs(to).catch(() => []);
 const clone = twins.length ? `与 ${twins.length} 个已知合约的对外函数完全相同，例如 ${twins[0]}` : null;
 if (clone) log('verify', '疑似批量模板项目：' + clone + '，付费部分不打', { contract: to });
-const r2 = await planPaid({ free, paid: qty - free, totalOf }, { spending: S, usdPerBnb, verified, official, freeOnly: FREE_ONLY, clone, spentToday, paidSoFar });
+// 防骗检查：只在真的可能付费时跑（只读链）。没跑完按不通过处理
+let scam = null;
+if (qty > free && !FREE_ONLY && S.allowAutoPaid === true) {
+  const dc = await devCheck(to).catch(e => ({ verdict: '拦', block: ['检查没跑完：' + String(e.message || e).slice(0, 80)], warn: [] }));
+  log('verify', `防骗检查：${dc.verdict}${dc.block.length ? '（' + dc.block.join('；') + '）' : ''}${dc.warn.length ? '｜提醒：' + dc.warn.join('；') : ''}`.slice(0, 600), { contract: to });
+  if (dc.block.length) scam = dc.block.join('；').slice(0, 300);
+}
+const r2 = await planPaid({ free, paid: qty - free, totalOf }, { spending: S, usdPerBnb, verified, official, freeOnly: FREE_ONLY, clone, scam, spentToday, paidSoFar });
 let { paid, total, notes } = r2;
 qty = free + paid;
 if (qty === 0) stop('不打：没有免费张，' + (notes.join('、') || '付费部分不符合规则'));

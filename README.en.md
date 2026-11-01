@@ -1,6 +1,6 @@
 # Binance AI Wallet Tools (binance-ai-wallet-tools)
 
-[中文](README.md) · JackalBTC Tools · current version **v0.4.0** · [Changelog](CHANGELOG.en.md)
+[中文](README.md) · JackalBTC Tools · current version **v0.4.1** · [Changelog](CHANGELOG.en.md)
 
 > ⚠️ Deals with on-chain assets – **not financial advice**. Free mints only by default; read [Before you start](#before-you-start) and [Security design](#security-design) first.
 
@@ -8,6 +8,7 @@
 
 | Version | Date | Changes |
 |---|---|---|
+| **v0.4.1 Scam checks and cost safety** | 2026-11-01 | An anti-scam check runs before any paid mint (counts real transaction senders, bait self-minting, junk images, mass-deployed identical contracts; thresholds randomised per install), new `devcheck` command; token prices now also from GeckoTerminal (sees v4 pools), holding value capped at 30% of pool liquidity; approval watch (alerts on new approvals, read-only); take-profit falls back to the last BNB price and never takes cost as 0, and holdings with an empty cost are backfilled from the spending ledger |
 | **v0.4.0 Market watch and auto jobs** | 2026-11-01 | Dashboard holdings grouped as "can sell / market but no buyers / new / quiet / exited", exited cards show total cost, total returned and net P&L; Element on-chain fills / bids watch (read-only); optional scheduled auto-claim, card-to-token auto-redeem and auto take-profit (send transactions, off by default); optional Flap Agent new-market alerts in the radar |
 | **v0.3.3 Only what costs money** | 2026-10-31 | Telegram no longer pushes each free mint (see the nightly summary); new ringing "paid project brief" alert; `/holdings` `/pnl` |
 | **v0.3.2 Small fix** | 2026-10-30 | Wallet drop-down refreshes on its own after renaming or adding a wallet |
@@ -146,7 +147,7 @@ One command runs the whole flow; any failed step stops it and logs why:
 2. **Free units**: determined by simulating with value = 0, independent of each project's quote format.
 3. **Price**: first a quote function found in the contract ABI (return values named like wei / cost / price), then common function names, then "unit price × quantity"; whatever is found is simulated again with that value, and a mismatch means no mint.
 4. **Spending rules** (see [Configuration](#configuration)):
-   - Auto-pay off, unverified source, no official site / account in the ledger, mass-deployed template, unit price over the cap → the paid part is dropped, only free units are minted.
+   - Auto-pay off, unverified source, no official site / account in the ledger, mass-deployed template, unit price over the cap, **anti-scam check blocked (or did not finish)** → the paid part is dropped, only free units are minted.
    - Cumulative paid units for this contract or today's spend over the cap → the number of paid units is reduced automatically.
 5. **Binance preview gate** (hard-coded, cannot be configured away):
    - no debit at all except BNB paid to this contract and not above the quote (including ERC20 or NFT outflows);
@@ -168,6 +169,14 @@ Read-only, no transactions. In one go:
 - name, total supply, how many you hold;
 - mint / claim functions in the ABI and their value-0 simulation results;
 - read-only functions about price, caps and switches.
+
+**Paid-project anti-scam check – devcheck**: `node src/cli/devcheck.mjs <contract> [--json]` (`npm run devcheck -- <contract>`), read-only. `mint` runs it automatically before paying; any "block" drops the paid part. The AI also includes the verdict in paid-project briefs. It checks:
+- **Minters are counted by who sent the mint transaction** (`tx.from`), not by who received tokens – airdrops / minting on behalf can't inflate it. Below the per-install threshold → block; when the contract holds almost no BNB / USDT (money went elsewhere) the threshold is higher;
+- **One address minted more than 30%** → block (the team self-minting to fake progress);
+- **NFT image**: empty tokenURI, fake IPFS link, link that doesn't exist, not an image, no image in metadata → block; IPFS is tried on 4 gateways in turn, and rate limits / gateway errors / timeouts only warn; the same image already seen under another contract → block;
+- **Same contract code** (minimal proxies and EIP-1967 proxies are resolved to their implementation) appearing 3+ times within 24 hours → block. "Seen contracts" = radar candidates from the last 24 hours + contracts checked in the last 24 hours.
+
+Thresholds are **randomised once per install** (paid share-mint progress 60–70%, min senders 20–30, 40–55 when the money is not in the contract), stored in `data/thresholds.json`; `devcheck --thresholds` shows them, deleting the file re-rolls them. Public thresholds invite projects tuned to sit right on them; per-install values can't be targeted. Exit code 2 when anything is blocked.
 
 ### 5. Proof of work – pow
 `src/cli/pow.mjs` · `node src/cli/pow.mjs --hash sha256|keccak256 --prefix 0x… --bits N [--mode abi|text]`
@@ -191,7 +200,7 @@ Runs on your machine only and is read-only: no signing, no transactions, no stor
 | Page | Contents |
 |---|---|
 | **Overview** | Asset value (tokens + NFTs at rarity-aware floor), mints today, project cards waiting for you (collapsible, can be dismissed until the radar sees them again), important project updates, gas balance and alert line, collections (paged), P&L card (realized + unrealized; several sales of one project merged into one row; money spent on things without a price yet shown separately as "awaiting market") |
-| **Holdings & market** | Per NFT collection: units held, cost, floor price, rarity-aware value and P&L, mint progress. Tokens you bought are listed too (balance read on-chain; once DexScreener sees a pool they show price and P&L, before that "not launched"). Tokens partly sold by take-profit show "sold / remaining cost". Groups: **can sell** (a real price exists) / **market but no buyers** (Element fills but nobody bids on our token ids, or a market with no listings) / **new** / **quiet** / **exited** (only total cost, total returned and net P&L; "no sale records" if none) / **written off**. Recomputed as soon as the holdings file changes; the page refreshes every minute |
+| **Holdings & market** | Per NFT collection: units held, cost, floor price, rarity-aware value and P&L, mint progress. Tokens you bought are listed too (balance read on-chain; once DexScreener or GeckoTerminal sees a pool they show the price of the deepest pool and P&L, with value capped at 30% of that pool's liquidity, before that "not launched"). Tokens partly sold by take-profit show "sold / remaining cost". Groups: **can sell** (a real price exists) / **market but no buyers** (Element fills but nobody bids on our token ids, or a market with no listings) / **new** / **quiet** / **exited** (only total cost, total returned and net P&L; "no sale records" if none) / **written off**. Recomputed as soon as the holdings file changes; the page refreshes every minute |
 | **X radar** | Running status, spend, recent leads (marked minted / waiting / unhandled), radar log |
 | **Project updates** | Chinese summaries for joined projects, rated important / opportunity / caution / general; important ones can be marked read |
 | **Collection** | Your NFTs with image, id, rarity and traits |
@@ -241,7 +250,7 @@ Technical notes:
 | `npm run doctor` | Self-check: Node, dependencies, baw, wallet sign-in, Developer Mode, BNB, config, X key, Telegram |
 | `npm run service install / status / uninstall` | Runs the radar, dashboard, Telegram bot and background jobs (only if enabled) in the background with auto-restart (launchd on macOS; pm2 commands elsewhere) |
 | `npm run check` | Pre-publish privacy scan: wallet addresses, transaction hashes, local paths, emails, key-like strings and seed phrases |
-| `npm test` | 68 unit tests: spending rules, preview gate, quote detection, Telegram message formatting, multiple wallets, take-profit stages, Element log parsing, dashboard grouping, auto-claim / redeem checks |
+| `npm test` | 91 unit tests: spending rules, preview gate, quote detection, Telegram message formatting, multiple wallets, take-profit stages, Element log parsing, dashboard grouping, auto-claim / redeem checks, anti-scam check, pricing and value cap, approval watch, cost audit |
 
 The repository's GitHub Actions also run the syntax check, unit tests and privacy scan on every commit.
 
@@ -279,9 +288,11 @@ The dashboard header gets a wallet switcher (shown only with 2+ wallets): one wa
 | Job | Switch | Default | What it does |
 |---|---|---|---|
 | **Element market watch** | `marketWatch.enabled` | on (read-only) | Every 30 min reads fills, bids and cancels on the Element exchange. Alerts once when there were ≥3 fills in 3 days with the last ≥ $2, or a live bid ≥ $5 on **token ids we hold**. The dashboard uses it for "can sell / market but no buyers" |
+| **Approval watch** | `approvalWatch.enabled` | on (read-only) | Every 30 min runs `baw approvals list` per wallet. The first run only records a baseline; after that each new approval is pushed as an update, ringing when unlimited or flagged risky by Binance. **Alerts only, never revokes** |
+| **Cost audit** | `costAudit.enabled` | on (no transactions) | Hourly: a collection the spending ledger shows BNB paid for but whose holding cost is empty / 0 gets the cost backfilled from the ledger, with a notice |
 | **Scheduled auto-claim** | `auto.claims.enabled` | **off** | Claims registered in `data/claims.json`: at the time, simulate, then preview; executes only with no debits at all, no approvals, no risk flags, no App confirmation, and the registered token received. The token is added to holdings |
 | **Card-to-token redeem** | `auto.redeem.enabled` | **off** | When someone on-chain burns a card and receives a token, replays the same call for your cards; zero approvals, zero payment, only this wallet's own cards; the preview may only take those cards and must deliver the token |
-| **Auto take-profit** | `auto.takeProfit.enabled` | **off** | Tokens in holdings with a cost: at 3x sell the cost basis, at 10 / 30 / 50 / 100 / 150 / 200x sell 20% of what is left, after the 10x stage a fall back to 3x sells half. Per token: `hold` (never sell), `sellOnce` (sell once), `firstTp`, `ladder`, `back3`. Sells into BNB only, never buys; when Binance requires App confirmation you are notified |
+| **Auto take-profit** | `auto.takeProfit.enabled` | **off** | Tokens in holdings with a cost (price from the deepest DexScreener / GeckoTerminal pool; if the BNB price can't be read the last good one is used, otherwise the round is skipped – cost is never taken as 0): at 3x sell the cost basis, at 10 / 30 / 50 / 100 / 150 / 200x sell 20% of what is left, after the 10x stage a fall back to 3x sells half. Per token: `hold` (never sell), `sellOnce` (sell once), `firstTp`, `ladder`, `back3`. Sells into BNB only, never buys; when Binance requires App confirmation you are notified |
 
 - The three transaction-sending jobs are **off by default**; switches must be `true` / `false` (no quotes – a typo exits with an error). Read [docs/auto.md](binance-ai-wallet-tools/docs/auto.md) (Chinese) first: rules, file formats and risks for each.
 - Everything goes through `baw contract-call preview` → `execute` (take-profit uses `baw market-order swap`), shares the mint lock, logs every step and re-checks the wallet session before executing. **No Permit / Permit2, no setApprovalForAll, no approvals, no transfers.**
@@ -294,6 +305,8 @@ The dashboard header gets a wallet switcher (shown only with 2+ wallets): one wa
 | Instructions hidden in posts / web pages for the AI (injection) | External content is data only; no external scripts, installs or downloads; stop and log when seen |
 | Contracts that secretly take money or ask for approval | Every transaction goes through Binance's official preview first; extra debits, approvals or risk flags mean no execution (hard-coded) |
 | The AI spending on and on | Free only by default; paying must be enabled by you and is capped per unit and per project (cumulative), plus an optional daily cap; one mint at a time |
+| Fake progress, bait mints, junk images, mass-deployed paid mints | An anti-scam check runs before paying; a block or an unfinished check drops the paid part; thresholds are random per install |
+| Unknown approvals appearing in the wallet | Approval watch checks every 30 min and pushes new approvals, ringing for unlimited / risky ones (alerts only – you revoke) |
 | Background jobs selling / claiming / redeeming wrongly | Off by default; once on, every transaction is simulated and previewed first, and any debit, approval or risk flag stops it; take-profit only sells registered tokens and only into BNB |
 | Misconfiguration | Wrong types or formats exit with an error instead of silently using other values |
 | Leaked keys | The private key is in Binance custody and unreachable; X, xAI and Telegram keys live only in `~/.config/binance-ai-wallet-tools/secrets.json` (600) – never in the repo, logs or the AI process |
@@ -362,6 +375,8 @@ Then tell the AI "**start watching for new projects**". Free projects that pass 
 | `marketWatch` | `enabled` | `true` | Element market watch (read-only), run by the auto job |
 | | `everyMinutes` / `firstBlocks` | `30` / `900000` | How often / how far back at most |
 | | `minFills` / `minFillUsd` / `minBidUsd` | `3` / `2` / `5` | Alert rule: fills in 3 days and last price, or a bid on our token ids |
+| `approvalWatch` | `enabled` / `everyMinutes` | `true` / `30` | Approval watch (read-only, alerts only) |
+| `costAudit` | `enabled` | `true` | Cost audit (hourly, only fills empty / 0 holding costs) |
 | `auto` | `claims.enabled` | `false` | Scheduled claims from `data/claims.json` (sends transactions) |
 | | `redeem.enabled` / `everyMinutes` / `firstBlocks` | `false` / `10` / `20000` | Card-to-token redeem (sends transactions) |
 | | `takeProfit.enabled` / `everyMinutes` / `slippage` | `false` / `2` / `10` | Auto take-profit (sells tokens), slippage in percent |
@@ -380,6 +395,9 @@ All in `data/`, yours only, never committed:
 | `news.json` | Chinese update summaries for joined projects |
 | `watch-accounts.json` | Followed official accounts |
 | `fingerprints.json` | Contract interface fingerprints (template detection) |
+| `thresholds.json` | Per-install random thresholds for the anti-scam check (delete to re-roll) |
+| `nft-images.json` / `devcheck-codes.json` | NFT images and contract code fingerprints seen by the anti-scam check (24-hour same-code count, kept 7 days) |
+| `approvals-state.json` | Approvals recorded per wallet by the approval watch (only used to spot new ones) |
 | `radar-*.json(l)` | Radar state and leads |
 | `claims.json` | Scheduled claims (optional, format in [docs/auto.md](binance-ai-wallet-tools/docs/auto.md)) |
 | `market-watch.json` | Element watch progress and the last 7 days of fills / bids |
@@ -394,7 +412,7 @@ All in `data/`, yours only, never committed:
 
 **The wallet keeps disconnecting?** An AI Wallet allows one signed-in session at a time – run `baw auth signin` again; both the radar log and Telegram will tell you.
 
-**Will the AI overspend?** Free only by default; with auto-pay on, three caps apply and every transaction must pass Binance's preview. The money caps are the real backstop – set them to what you can afford to lose.
+**Will the AI overspend?** Free only by default; with auto-pay on, three caps apply, paid mints must pass the anti-scam check, and every transaction must pass Binance's preview. The money caps are the real backstop – set them to what you can afford to lose.
 
 **Not receiving Telegram messages?** Run `npm run doctor` and check the Telegram line, make sure pairing is done and the background service is running; if `/status` gets a reply, it works.
 

@@ -549,7 +549,7 @@ function renderPositions() {
         ...(p.soldQty != null ? [['已卖出', `<b class="num">${fmt(p.soldQty, 0)} 枚</b><span class="muted"> · 收回 ${costTxt(p.soldProceeds)}</span>`],
           ['剩余成本', cu != null && !isNaN(cu) ? `<b class="num">${usd(Math.max(0, cu - sc))}</b>${cu - sc <= 0 ? '<span class="accent"> · 已回本</span>' : ''}` : '<span class="muted">-</span>']] : []),
         ...(p.writtenOff?.note ? [['备注', `<span style="color:var(--bad)">${esc(p.writtenOff.note)}</span>`]] : []),
-        [kind ? (p.byRarity && rar.length ? '整体' + kind : kind) : '市场价', price != null ? `<b class="num">${fmt(price, dec)} ${esc(p.currency)}</b>${p.listed != null ? `<span class="muted"> · 在售 ${p.listed}</span>` : ''}${p.liquidity != null ? `<span class="muted"> · 池子 ${usd(p.liquidity)}</span>` : ''}${p.el?.bids ? `<span class="muted"> · ${p.el.bids} 个编号有人求购</span>` : ''}` : `<span class="muted">${noPrice}</span>`],
+        [kind ? (p.byRarity && rar.length ? '整体' + kind : kind) : '市场价', price != null ? `<b class="num">${fmt(price, dec)} ${esc(p.currency)}</b>${p.listed != null ? `<span class="muted"> · 在售 ${p.listed}</span>` : ''}${p.liquidity != null ? `<span class="muted"> · 池子 ${usd(p.liquidity)}${p.valueCapped ? ' · 现值按池子 3 成封顶' : ''}</span>` : ''}${p.el?.bids ? `<span class="muted"> · ${p.el.bids} 个编号有人求购</span>` : ''}` : `<span class="muted">${noPrice}</span>`],
         ...rarRows,
         [rarRows.length ? '按稀有度估值' : '估算市值', val != null ? `<b class="num">${usd(val)}</b>` : '<span class="muted">-</span>'],
       ];

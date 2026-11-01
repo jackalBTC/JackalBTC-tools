@@ -6,6 +6,30 @@ What changed in each version, newest first. To upgrade: `git pull` in the repo, 
 
 ---
 
+## v0.4.1 — 2026-11-01 · Scam checks and cost safety
+
+### New
+- **Paid-project anti-scam check** (read-only): new command `npm run devcheck -- <contract>` (`--json` for JSON, `--thresholds` to show this install's thresholds; exit code 2 when blocked). `mint` runs it automatically before paying; any "block", or a check that did not finish, drops the paid part and only free units are minted. The AI also includes the verdict in paid-project briefs. Checks:
+  - minters are counted by **who sent the mint transaction** (`tx.from`), not by who received tokens, so airdrops / minting on behalf can't inflate it; too few → block, and more are required when the contract holds almost no BNB / USDT;
+  - one address minting more than 30% → block (bait: the team self-minting to fake progress);
+  - NFT image: empty tokenURI, fake IPFS link, link that doesn't exist, not an image, no image in metadata → block; IPFS is tried on 4 gateways in turn and rate limits / gateway errors / timeouts only warn; the same image already used by another contract → block;
+  - the same contract code (minimal proxies and EIP-1967 proxies resolved to their implementation) 3+ times within 24 hours → block. "Seen contracts" are radar candidates from the last 24 hours plus contracts checked in the last 24 hours.
+  - Thresholds are **randomised once per install**: paid share-mint progress 60–70%, min senders 20–30 (40–55 when the money is not in the contract), stored in `data/thresholds.json`; delete it to re-roll.
+- **Approval watch** (read-only, on by default, `approvalWatch`): every 30 minutes checks each wallet's token approvals; the first run only records a baseline, after that every new approval is pushed as an update, ringing when unlimited or flagged risky by Binance. Alerts only, never revokes.
+- **Cost audit** (on by default, `costAudit`): hourly, a collection the spending ledger shows BNB paid for but whose holding cost is empty / 0 gets the cost filled in from the ledger, with a log entry and a notice.
+
+### Improved
+- **Token prices**: GeckoTerminal is used alongside DexScreener and the deepest BSC pool from either wins. DexScreener misses Uniswap v4 / PancakeSwap Infinity pools and can badly undervalue some tokens. GeckoTerminal requests are spaced at least 2.2 s apart; if it fails only DexScreener is used and the result is cached for just 30 s. Used by the dashboard and take-profit.
+- **Holding value cap**: a token's value is capped at 30% of its pool's liquidity (a thin pool can't absorb the paper value), re-capped after summing wallets; capped cards say so.
+
+### Fixed
+- When the BNB price can't be read, take-profit used to fail the whole round; it now uses the last good price (kept in its state file), or skips the round if there is none. A cost that isn't a valid positive number is recomputed every round and the token isn't sold until it is – cost is never taken as 0 / NaN.
+
+### Security
+- Everything new is read-only (anti-scam check, pricing, approval watch); the cost audit only edits the local holdings file. No approval, Permit / Permit2, setApprovalForAll or transfer code was added.
+
+---
+
 ## v0.4.0 — 2026-11-01 · Market watch and auto jobs
 
 ### New

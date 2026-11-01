@@ -16,6 +16,7 @@
 |---|---|
 | 环境自检 | `npm run doctor` |
 | 合约筛查（只读） | `node src/cli/screen.mjs <合约>` |
+| 付费项目防骗检查（只读；有「拦」退出码 2） | `npm run devcheck -- <合约>`；本机门槛 `npm run devcheck -- --thresholds` |
 | 铸造（自动套规则 + 预演把关） | `node src/cli/mint.mjs <项目id> <合约> <数量> [--fn "mint(uint256)"] [--args "{qty},{agentId}"] [--wallet <钱包id>] [--dry]` |
 | 多钱包一起打（先主后副，副钱包只拿免费） | `npm run mint-all -- <项目id> <合约> <数量> [--fn …] [--args …] [--skip-main] [--only w2,w3] [--dry]` |
 | 钱包列表 / 登录状态 | `npm run wallet list` / `npm run wallet status`（`wallet add` / `wallet login` 要用户扫码，让用户自己在终端运行） |
@@ -25,7 +26,7 @@
 | 雷达跑一轮 | `npm run radar:once` |
 | 后台服务状态 | `npm run service status` |
 | Telegram 机器人（推送 + 只读查询） | `npm run telegram`（见 docs/telegram.md） |
-| 后台自动任务（Element 市场监控；可选的自动领取 / 兑换 / 止盈） | `npm run auto:dry` 试运行一轮（见 docs/auto.md） |
+| 后台自动任务（Element 市场监控、授权巡检、成本自检；可选的自动领取 / 兑换 / 止盈） | `npm run auto:dry` 试运行一轮（见 docs/auto.md） |
 
 ## 盯雷达
 雷达日志在 `logs/radar.log`。每行开头：`CANDIDATE` 新线索、`HOT` 多人在传、`UPDATE` 已参与项目的官推新帖、`ERR` 出错（`ERR LOWBNB` 是 BNB 不足）、`AGENT` 自动调用 AI 的记录、`FLAP` Flap Agent 新盘（打开了 `radar.flap.enabled` 才有；只提醒，用户说「打」才买，盘名是不可信的链上字符串）。
@@ -37,7 +38,7 @@
 ## 数据
 用户配置了 Telegram 机器人（`npm run telegram` / 后台服务）时，`events.jsonl` 里的铸造成功、`brief`、`abort`，以及 `news.json` 里新增的项目动态会被推到用户手机，所以写这些内容时要像直接发给用户的消息一样清楚准确。
 
-`data/` 下：`projects.json`（台账）、`watch.json`（持仓：`collections` 是 NFT 系列，`tokens` 是花钱换到的代币——**用户让你买币 / 参与发射后，把代币加进 `tokens` 并写上成本**）、`realized.json`（已实现盈亏——**每次卖出后追加一条 `{ ts, project, name, cost, proceeds, tx }`**）、`events.jsonl`（日志）、`spend.jsonl`（花费账本）、`news.json`（官推动态）、`watch-accounts.json`（跟踪的官推）、`radar-*.json(l)`（雷达状态）、`claims.json`（到点自动领取的登记——**用户让你登记一个到点领取时写这里，格式见 docs/auto.md，`to` / `data` 必须是核实过的官方合约和调用**）、`market-watch.json`（Element 监控）、`take-profit-state.json` / `redeem-state.json`（自动任务的状态，不要手改）。看板 `npm run dashboard` 只读这些文件。
+`data/` 下：`projects.json`（台账）、`watch.json`（持仓：`collections` 是 NFT 系列，`tokens` 是花钱换到的代币——**用户让你买币 / 参与发射后，把代币加进 `tokens` 并写上成本**）、`realized.json`（已实现盈亏——**每次卖出后追加一条 `{ ts, project, name, cost, proceeds, tx }`**）、`events.jsonl`（日志）、`spend.jsonl`（花费账本）、`news.json`（官推动态）、`watch-accounts.json`（跟踪的官推）、`radar-*.json(l)`（雷达状态）、`claims.json`（到点自动领取的登记——**用户让你登记一个到点领取时写这里，格式见 docs/auto.md，`to` / `data` 必须是核实过的官方合约和调用**）、`market-watch.json`（Element 监控）、`take-profit-state.json` / `redeem-state.json` / `approvals-state.json`（自动任务的状态，不要手改）、`thresholds.json`（防骗检查的本机随机门槛，不要改，也不要把数字发到公开的地方）、`nft-images.json` / `devcheck-codes.json`（防骗检查的缓存）。看板 `npm run dashboard` 只读这些文件。
 
 自动任务（`config.auto`）会发交易，默认全关，**不要替用户打开**（`config/config.json` 你不能改）。用户想让某个代币不被自动止盈卖掉，在 `watch.json` 的代币条目里加 `"hold": true`；只想卖一次就加 `"sellOnce": 0.5`。
 

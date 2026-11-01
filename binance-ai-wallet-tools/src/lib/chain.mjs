@@ -158,9 +158,4 @@ export async function tokenBalance(token, owner) {
 }
 // 最小单位 → 十进制字符串（不丢精度），例如 (1500000000000000000n, 18) → "1.5"
 export const fmtUnits = (raw, dec) => { const s = BigInt(raw).toString().padStart(dec + 1, '0'); const i = s.slice(0, s.length - dec) || '0', f = dec ? s.slice(-dec).replace(/0+$/, '') : ''; return f ? `${i}.${f}` : i; };
-// DexScreener：BSC 上流动性最大的池子。没有池子返回 null
-export async function dexQuote(token) {
-  const j = await (await fetch('https://api.dexscreener.com/latest/dex/tokens/' + token, { signal: AbortSignal.timeout(20000) })).json();
-  const p = (j.pairs || []).filter(x => x.chainId === 'bsc' && +x.priceUsd > 0).sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
-  return p ? { price: +p.priceUsd, liquidity: p.liquidity?.usd ?? null, url: /^https:\/\/dexscreener\.com\//.test(p.url) ? p.url : null, pair: isAddr(p.pairAddress) ? p.pairAddress : null } : null;
-}
+// 代币价格见 src/lib/price.mjs（DexScreener + GeckoTerminal，取流动性最大的池子）

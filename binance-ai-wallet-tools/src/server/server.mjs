@@ -11,7 +11,8 @@ import dns from 'node:dns/promises';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { config, readJson, writeJson, tailLines, ROOT } from '../lib/config.mjs';
-import { batch, sel, word, big, addrOf, decodeStr, rpc, baw, dexQuote } from '../lib/chain.mjs';
+import { batch, sel, word, big, addrOf, decodeStr, rpc, baw } from '../lib/chain.mjs';
+import { bestPrice, capValue } from '../lib/price.mjs';
 import { tierOf, realizedOf } from '../lib/tiers.mjs';
 import { elementSummary } from '../lib/element.mjs';
 import { readEvents } from '../lib/events.mjs';
@@ -162,15 +163,17 @@ async function positions(w) {
     p.tier = tierOf(p, now);
     list.push(p);
   }
-  // 打到的代币（watch.json 的 tokens）：链上读余额，DexScreener 有交易池就算开盘（取流动性最大的池子报价）
+  // 打到的代币（watch.json 的 tokens）：链上读余额，DexScreener / GeckoTerminal 有交易池就算开盘（取流动性最大的池子报价）
+  // 现值 = 数量 × 价格，但最多按该池流动性的 30% 算（小池子砸不出账面价）
   for (const t of wl.tokens || []) {
     const [b, d] = await batch([[t.contract, '0x' + sel('balanceOf(address)') + word(W)], [t.contract, '0x' + sel('decimals()')]]);
     const held = Number(big(b)) / 10 ** (Number(big(d)) || 18);
-    const mk = await cached('dex:' + t.contract, 600e3, async () => await dexQuote(t.contract) || {}).catch(() => ({}));
+    const mk = await cached('dex:' + t.contract, 120e3, async () => await bestPrice(t.contract) || {}).catch(() => ({}));
+    const full = mk.price != null ? mk.price * held : null, value = mk.price != null ? capValue(held, mk) : null;
     const sold = rz(t.id);   // 止盈卖掉的部分
     const p = { id: t.id, name: t.name, symbol: t.symbol, contract: t.contract, kind: 'token', held, cost: t.cost || null,
       marketType: mk.price != null ? 'dex' : 'none', currency: 'USD', floor: mk.price ?? null, liquidity: mk.liquidity ?? null,
-      url: mk.url || null, value: mk.price != null ? mk.price * held : null, note: mk.price != null ? null : '还没开盘（没有交易池）',
+      url: mk.url || null, value, valueCapped: full != null && value < full, priceSrc: mk.src || null, pricePartial: !!mk.partial, note: mk.price != null ? null : '还没开盘（没有交易池）',
       realized: sold, ...(sold ? { soldQty: sold.qty || undefined, soldCost: sold.cost, soldProceeds: sold.proceeds } : {}),
       writtenOff: t.writtenOff || null, firstMint: act.first[t.id] || null, lastNews: act.news[t.id] || null };
     p.tier = tierOf(p, now);

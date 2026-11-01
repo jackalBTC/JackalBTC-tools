@@ -137,6 +137,15 @@
     "minBidUsd": 5,
     "_min": "报的规则：近 3 天成交 ≥ minFills 笔且最近一笔 ≥ minFillUsd 美元；或有人出价 ≥ minBidUsd 美元求购我们手上的编号。每个系列只报一次"
   },
+  "approvalWatch": {
+    "_说明": "授权巡检：每 30 分钟用 baw approvals list 看各钱包的代币授权，新出现的写一条项目动态（无限额或币安标了风险的响铃）。只读，只提醒、从不撤销。第一次只记底。由后台服务 auto 运行",
+    "enabled": true,
+    "everyMinutes": 30
+  },
+  "costAudit": {
+    "_说明": "成本自检：每小时一次，花费账 spend.jsonl 里付过 BNB、持仓 watch.json 里成本却是空 / 0 的系列，按账上实际付出补上并发一条通知。不发交易。由后台服务 auto 运行",
+    "enabled": true
+  },
   "auto": {
     "_说明": "会发交易的自动功能，全部默认关。打开前先读 docs/auto.md（每项的规则和风险）。改完重启后台服务：npm run service install",
     "claims": {

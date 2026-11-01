@@ -1,6 +1,9 @@
 // 看板「全部钱包」合计：把每个钱包的结果按合约合并。纯函数，test/ 里有单元测试。
 // 已实现盈亏（realized）和已卖出部分按币种相加；Element 成交笔数是同一个系列的，只取一份。
+// 代币现值合计后按池子流动性的 30% 重新封顶（见 src/lib/price.mjs）。
 // 成本是 { 币种: 数量 }（例如 { BNB: 0.01, USDT: 3 }），按币种相加；市值有一个是 null 就用另一个。
+import { capValue } from '../lib/price.mjs';
+
 export function addCost(a, b) {
   if (!a) return b ? { ...b } : null;
   if (!b) return { ...a };
@@ -25,6 +28,10 @@ export function mergePositions(lists) {
     if (p.firstMint && (!o.firstMint || p.firstMint < o.firstMint)) o.firstMint = p.firstMint;
     if (p.lastNews && (!o.lastNews || p.lastNews > o.lastNews)) o.lastNews = p.lastNews;
     o.writtenOff ||= p.writtenOff || null;
+  }
+  // 代币合计后重新封顶：几个钱包加起来也最多按池子流动性的 30% 算
+  for (const o of by.values()) if (o.kind === 'token' && o.floor != null && o.liquidity > 0 && o.value != null) {
+    const full = o.held * o.floor; o.value = capValue(o.held, { price: o.floor, liquidity: o.liquidity }); o.valueCapped = o.value < full;
   }
   return [...by.values()];
 }

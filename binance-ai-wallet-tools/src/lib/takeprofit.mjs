@@ -62,3 +62,6 @@ export function costToUsd(cost, bnbUsd) {
   const v = (+cost.USDT || 0) + (+cost.USD || 0) + (cost.BNB ? (bnbUsd ? +cost.BNB * bnbUsd : NaN) : 0);
   return Number.isFinite(v) && v > 0 ? v : null;
 }
+
+// 这一轮用的 BNB 价格：读到的有效就用它，读不到（NaN / 0）用上一次存下的，都没有返回 null（这一轮不动）
+export const usableBnbUsd = (fresh, last) => fresh > 0 && Number.isFinite(fresh) ? fresh : last > 0 && Number.isFinite(last) ? last : null;

@@ -47,6 +47,12 @@ function validate(cfg) {
     if (!num(mw.everyMinutes, 5)) errs.push('marketWatch.everyMinutes 至少 5');
     for (const k of ['firstBlocks', 'minFills', 'minFillUsd', 'minBidUsd']) if (!num(mw[k], 0)) errs.push(`marketWatch.${k} 必须是不小于 0 的数字`);
   }
+  const aw = cfg.approvalWatch;
+  if (aw) {
+    if (typeof aw.enabled !== 'boolean') errs.push('approvalWatch.enabled 必须是 true 或 false');
+    if (!num(aw.everyMinutes, 5)) errs.push('approvalWatch.everyMinutes 至少 5');
+  }
+  if (cfg.costAudit && typeof cfg.costAudit.enabled !== 'boolean') errs.push('costAudit.enabled 必须是 true 或 false');
   // 会发交易的自动功能：开关必须明确写 true / false，写错直接退出（不会因为写成 "true" 字符串就悄悄打开或关掉）
   for (const k of ['claims', 'redeem', 'takeProfit']) {
     const a = cfg.auto?.[k];

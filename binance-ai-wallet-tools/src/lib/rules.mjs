@@ -34,8 +34,8 @@ export function checkPreview(data, { me, total }) {
 
 // 按花钱规则决定付费几张。
 //   free / paid：免费张数、想付费的张数；totalOf(q)：q 张一共要付多少 wei（async，可能返回 null）
-//   ctx：{ spending, usdPerBnb, verified, official, freeOnly, clone, spentToday, paidSoFar }
-// 返回 { paid, total, notes }：不能付的直接归零（单价超、没开自动付费、未验证、无官源、模板克隆），
+//   ctx：{ spending, usdPerBnb, verified, official, freeOnly, clone, scam, spentToday, paidSoFar }（scam：防骗检查拦下的原因，见 src/lib/devcheck.mjs）
+// 返回 { paid, total, notes }：不能付的直接归零（单价超、没开自动付费、未验证、无官源、模板克隆、防骗检查不通过），
 // 张数 / 每日金额超了就一张张往下减。
 export async function planPaid({ free, paid, totalOf }, ctx) {
   const S = ctx.spending, notes = [];
@@ -50,6 +50,7 @@ export async function planPaid({ free, paid, totalOf }, ctx) {
   if (!ctx.verified) hard.push('源码未验证');
   if (!ctx.official) hard.push('台账里没有官网 / 官推');
   if (ctx.clone) hard.push(`疑似批量模板项目（${ctx.clone}）`);
+  if (ctx.scam) hard.push(`防骗检查不通过（${ctx.scam}）`);
   if (bnb(total) > S.gasLikeBnb && unitUsd > S.maxUnitUsd) hard.push(`单张约 $${unitUsd.toFixed(2)} 超过 $${S.maxUnitUsd}`);
   if (hard.length) return { paid: 0, total: 0n, notes: hard };
   const want = paid;

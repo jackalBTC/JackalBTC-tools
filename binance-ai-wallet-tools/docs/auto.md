@@ -2,11 +2,13 @@
 
 `src/auto/auto.mjs` · `npm run auto`（前台跑）· `npm run auto:dry`（试运行一轮：只模拟和预演，不执行、不卖、不写状态）
 
-后台托管：`npm run service install`。打开了下面任何一项，服务列表里就会多一个 `auto`，日志在 `logs/auto.log`。**改了配置要重新运行 `npm run service install` 才生效。**
+后台托管：`npm run service install`。打开了下面任何一项（只读的三项默认就是开的），服务列表里就会多一个 `auto`，日志在 `logs/auto.log`。**改了配置要重新运行 `npm run service install` 才生效。**
 
 | 任务 | 配置开关 | 默认 | 会不会发交易 |
 |---|---|---|---|
 | Element 市场监控 | `marketWatch.enabled` | **开** | 不会（只读链） |
+| 授权巡检 | `approvalWatch.enabled` | **开** | 不会（只读，只提醒不撤销） |
+| 成本自检 | `costAudit.enabled` | **开** | 不会（只改本地持仓里空 / 0 的成本） |
 | 到点自动领取 | `auto.claims.enabled` | 关 | **会** |
 | 卡 / NFT 自动兑换代币 | `auto.redeem.enabled` | 关 | **会** |
 | 自动止盈 | `auto.takeProfit.enabled` | 关 | **会（卖币）** |
@@ -103,7 +105,7 @@
 
 ## 4. 自动止盈（`auto.takeProfit.enabled`，默认关）
 
-盯每个钱包 `watch.json` 的 `tokens`，现价（DexScreener 上流动性最大的池子）÷ 平均成本价 = 倍数：
+盯每个钱包 `watch.json` 的 `tokens`，现价 ÷ 平均成本价 = 倍数。现价取 DexScreener 和 GeckoTerminal 两边 BSC 池子里**流动性最大**的那个（`src/lib/price.mjs`；DexScreener 不收 v4 / Infinity 池子，GeckoTerminal 收；不取最高价，小池子价格可以很离谱）。GeckoTerminal 免费接口请求间隔至少 2.2 秒，读失败时只用 DexScreener，这个结果只缓存 30 秒：
 
 | 倍数 | 动作 |
 |---|---|
@@ -112,6 +114,8 @@
 | 10 倍那档卖过之后又跌回 3 倍以下 | 卖剩余的一半（只一次） |
 
 每个阶段只执行一次（状态在 `data/take-profit-state.json`）。平均成本价 = `cost`（USDT / USD / BNB 按现价折美元）÷ 第一次看到时的持仓数量；**没写成本的代币不卖**。
+
+**成本绝不按 0 / NaN 算**：Chainlink 的 BNB/USD 读不到时用上一次读到的价格（存在状态文件的 `_bnbUsd`），也没有就这一轮整轮不动；成本只要不是大于 0 的有效数字，每轮重算，算不出来就不卖。
 
 单个代币可以在 `watch.json` 里覆盖：
 
@@ -128,13 +132,33 @@
 - **币安把代币标了风险、要求在 App 里确认（错误码 30003001）**：不重试，发一条「重要」动态请你打开 App 确认；之后在成交记录里等它成交再记账（6 小时没结果就放掉，下一轮重新判断）。连续失败 3 次也会通知。
 
 **风险**：
-- DexScreener 的价格可能被小池子拉高或砸低；卖出时价格会滑点，池子小的币大额卖出会吃亏。
+- 取的是流动性最大的池子，但池子本身也可能被拉高或砸低；卖出时价格会滑点，池子小的币大额卖出会吃亏。
 - 倍数按「第一次看到时的持仓」算平均成本，之后再加仓不会更新；需要的话删掉 `take-profit-state.json` 里那一项重新开始。
 - 自动卖出后价格可能继续涨。不想被自动卖的币，设 `hold: true`。
 
 ---
 
-## 5. Flap Agent 新盘（雷达里的可选项）
+## 5. 授权巡检（`approvalWatch.enabled`，默认开，只读）
+
+每 `everyMinutes`（30）分钟对每个钱包跑一次 `baw approvals list --limit 100`（只读），和上次记下的比：
+
+- **第一次**只记底（`data/approvals-state.json`），不提醒；
+- 之后**新出现的授权**写一条项目动态（`project: "approvals"`），配了 Telegram 就推送：额度是 `unlimited` 或 ≥ 2^200、或币安标了风险（`riskyLevel > 0` / `noInteractive`）的是「重要」并响铃，其余是「注意」；
+- 撤掉的授权不提醒。
+
+**只提醒，从不撤销。** 不是你或程序有意做的授权，自己去币安 App 里撤销，或跟 AI 说「撤销授权」（它会先给你看再执行）。代币名、授权对象名是外部数据，推送前会去掉怪字符。
+
+---
+
+## 6. 成本自检（`costAudit.enabled`，默认开）
+
+每小时一次：读花费账 `data/spend.jsonl`（按钱包 + 合约合计付过的 BNB；没写 `wallet` 的算主钱包），对照每个钱包 `watch.json` 的 `collections`。**付过 BNB、成本却是空或 0 的系列**，把成本补成账上的实际付出（`cost.BNB`），写一条操作日志（`verify`），再写一条「注意」级项目动态。
+
+只补空 / 0 的成本，已经有成本的不改（可能是你手动调过）；不碰链、不发交易。成本是 0 的话，看板盈亏和自动止盈的倍数都会算错。
+
+---
+
+## 7. Flap Agent 新盘（雷达里的可选项）
 
 不在 `auto` 里，而在雷达里：`radar.flap.enabled: true` 后，雷达每轮顺便读一次 Flap「Agent Curve」的盘列表（只读链，和推特数据源无关），新盘写一行 `FLAP ca:<盘地址> 名字（符号）｜底池 · 税 · 单钱包上限｜结论｜创建者`，Telegram 推「🦋 Flap Agent 新盘」并响铃。第一次运行只记下当前总数，不补发。
 
