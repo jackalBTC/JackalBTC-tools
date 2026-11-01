@@ -20,6 +20,11 @@
 // 预演把关（写死，不能配置关掉，缺字段一律按不通过处理）：
 //   除了付给本合约、且不超过报价的 BNB 外不扣任何东西；没有授权 / 权限变化；没有任何风险提示（含风险地址）；不需要二次确认。
 //   收到代币或 NFT 算正常。
+// 付费按份铸币模式（--share-mint <通行证>，只由 src/cli/share-mint.mjs / mint-all.mjs 传入）：
+//   要求 config.shareMint.enabled=true，且 data/share-mint-gate.json 里有 share-mint 五关全过后签发、30 分钟内、同一项目和合约的通行证；
+//   这时不看 allowAutoPaid / 单价 / 张数 / 官网官推 / 副钱包 allowPaid，改按「这个钱包在这个项目累计花费 ≤ shareMint.budgetUsd」裁份数（src/lib/sharemint.mjs），
+//   设了 spending.maxDailyBnb 的话每日上限照样算；
+//   防骗检查已经在关口跑过，这里不重复；预演把关、会话核对、锁、日志、记账和平常完全一样。
 import fs from 'node:fs';
 import { config, readJson, dataFile, DATA } from '../lib/config.mjs';
 import { calldata as cd, sel, word, rpc, ethCall, baw, waitReceipt, nftIdsReceived, bnbUsd, sourcifyAbi, agentIdOf } from '../lib/chain.mjs';
@@ -27,6 +32,7 @@ import { checkPreview, planPaid, pickQuoteFromAbi } from '../lib/rules.mjs';
 import { backfill, sameCodeAs } from '../lib/clones.mjs';
 import { devCheck } from '../lib/devcheck.mjs';
 import { logEvent } from '../lib/events.mjs';
+import { planShare, spentUsdFor, gateValid } from '../lib/sharemint.mjs';
 import { getWallet, readWallets, readWatch, writeWatch, envFor, sessionOk, multiWallet } from '../lib/wallets.mjs';
 
 const USAGE = '用法: node src/cli/mint.mjs <项目id> <合约> <数量> [--fn "mint(uint256)"] [--args "{qty}"] [--wallet <钱包id>] [--free-only] [--dry]';
@@ -36,7 +42,7 @@ const MAX_QTY = 50;
 const argv = process.argv.slice(2), pos = [], o = {};
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
-  if (a === '--fn' || a === '--args' || a === '--wallet') { if (argv[i + 1] == null) { console.error(`${a} 后面缺少值\n${USAGE}`); process.exit(1); } o[a.slice(2)] = argv[++i]; }
+  if (a === '--fn' || a === '--args' || a === '--wallet' || a === '--share-mint') { if (argv[i + 1] == null) { console.error(`${a} 后面缺少值\n${USAGE}`); process.exit(1); } o[a.slice(2)] = argv[++i]; }
   else if (a === '--dry' || a === '--free-only') o[a.slice(2)] = true;
   else if (a.startsWith('-')) { console.error(`不认识的参数 ${a}（为了安全，拼错的参数不会被忽略）\n${USAGE}`); process.exit(1); }
   else pos.push(a);
@@ -51,14 +57,21 @@ if (!/^[A-Za-z_][A-Za-z0-9_]*\((uint256|uint8|uint16|uint32|uint64|address)?(,(u
   console.error('--fn 只支持参数类型为整数 / 地址的函数签名，例如 mint(uint256)、mint(uint256,address)、mint()'); process.exit(1);
 }
 const S = config.spending;
+const SHARE = o['share-mint'] != null;   // 付费按份铸币模式
+if (SHARE && o['free-only']) { console.error('--share-mint 不能和 --free-only 一起用'); process.exit(1); }
+if (SHARE && !DRY) {
+  if (config.shareMint?.enabled !== true) { console.error('config.shareMint.enabled 没打开，按份铸币只出简报、不发交易'); process.exit(1); }
+  const e = gateValid(readJson('share-mint-gate.json', null), { token: o['share-mint'], pid, contract: to });
+  if (e) { console.error('按份铸币通行证无效：' + e); process.exit(1); }
+}
 
 // ---------- 钱包 ----------
 let WAL, MAIN_ID;
 try { WAL = await getWallet(o.wallet); MAIN_ID = readWallets().find(w => w.main).id; }
 catch (e) { console.error(e.message); process.exit(1); }
 const ENV = envFor(WAL), WTAG = multiWallet() ? WAL.id : null;   // 只有配置了多钱包才在日志 / 账本里写 wallet 字段
-const FREE_ONLY = !!o['free-only'] || (!WAL.main && !WAL.allowPaid);   // 副钱包默认只打免费
-if (!WAL.main && !WAL.allowPaid && !o['free-only']) console.log(`钱包 ${WAL.id} 是副钱包、没有设 allowPaid，只打免费张`);
+const FREE_ONLY = !SHARE && (!!o['free-only'] || (!WAL.main && !WAL.allowPaid));   // 副钱包默认只打免费（按份铸币模式例外：用户在配置里打开了 shareMint）
+if (!SHARE && !WAL.main && !WAL.allowPaid && !o['free-only']) console.log(`钱包 ${WAL.id} 是副钱包、没有设 allowPaid，只打免费张`);
 
 // 日志：写不进去就停下（execute 之前），不让交易在没有记录的情况下发生
 const log = (step, detail, opt = {}) => {
@@ -149,15 +162,22 @@ const paidSoFar = ledger.filter(e => String(e.contract).toLowerCase() === to.toL
 await backfill(readWallets().flatMap(w => readWatch(w).collections || []).map(c => c.contract)).catch(() => {});
 const twins = await sameCodeAs(to).catch(() => []);
 const clone = twins.length ? `与 ${twins.length} 个已知合约的对外函数完全相同，例如 ${twins[0]}` : null;
-if (clone) log('verify', '疑似批量模板项目：' + clone + '，付费部分不打', { contract: to });
+if (clone) log('verify', '疑似批量模板项目：' + clone + (SHARE ? '（按份铸币模式：发射平台的合约本来就同一模板，只提醒；批量同款已由防骗检查把关）' : '，付费部分不打'), { contract: to });
 // 防骗检查：只在真的可能付费时跑（只读链）。没跑完按不通过处理
 let scam = null;
-if (qty > free && !FREE_ONLY && S.allowAutoPaid === true) {
+if (qty > free && !FREE_ONLY && S.allowAutoPaid === true && !SHARE) {   // 按份铸币模式：share-mint 关口已跑过防骗检查
   const dc = await devCheck(to).catch(e => ({ verdict: '拦', block: ['检查没跑完：' + String(e.message || e).slice(0, 80)], warn: [] }));
   log('verify', `防骗检查：${dc.verdict}${dc.block.length ? '（' + dc.block.join('；') + '）' : ''}${dc.warn.length ? '｜提醒：' + dc.warn.join('；') : ''}`.slice(0, 600), { contract: to });
   if (dc.block.length) scam = dc.block.join('；').slice(0, 300);
 }
-const r2 = await planPaid({ free, paid: qty - free, totalOf }, { spending: S, usdPerBnb, verified, official, freeOnly: FREE_ONLY, clone, scam, spentToday, paidSoFar });
+let r2;
+if (SHARE) {
+  const budgetUsd = config.shareMint?.budgetUsd;
+  const spentUsd = spentUsdFor(ledger, { pid, contracts: [to], walletId: WAL.id, mainId: MAIN_ID, usdPerBnb });
+  r2 = await planShare({ free, want: qty - free, totalOf }, { budgetUsd, spentUsd, usdPerBnb, maxDailyBnb: S.maxDailyBnb ?? null, spentTodayBnb: spentToday });
+  if (!verified) r2 = { paid: 0, total: 0n, notes: ['源码未验证'] };
+  log('verify', `按份铸币预算：这个钱包在这个项目已花 ${spentUsd == null ? '?' : '$' + spentUsd.toFixed(2)}，预算 $${budgetUsd}${r2.paid ? `，这次 ${r2.paid} 份 ≈ $${r2.usd.toFixed(2)}` : ''}`, { contract: to });
+} else r2 = await planPaid({ free, paid: qty - free, totalOf }, { spending: S, usdPerBnb, verified, official, freeOnly: FREE_ONLY, clone, scam, spentToday, paidSoFar });
 let { paid, total, notes } = r2;
 qty = free + paid;
 if (qty === 0) stop('不打：没有免费张，' + (notes.join('、') || '付费部分不符合规则'));
@@ -183,9 +203,10 @@ const ex = await baw(['contract-call', 'execute', '--requestId', x.requestId], E
 if (!ex.success) stop('执行失败：' + JSON.stringify(ex.error || ex).slice(0, 160));
 const tx = ex.data?.txHash;
 if (!tx) stop('执行未广播（可能需要在币安 App 里确认）：' + JSON.stringify(ex.data).slice(0, 160));
-try { fs.appendFileSync(dataFile(SPEND), JSON.stringify({ ts: new Date().toISOString(), pid, contract: to, paid, bnb: Number(total) / 1e18, tx, ...(WTAG ? { wallet: WTAG } : {}) }) + '\n'); }
+const usdNow = usdPerBnb ? +(Number(total) / 1e18 * usdPerBnb).toFixed(4) : null;   // 记下当时的美元数：按份铸币的预算按它算
+try { fs.appendFileSync(dataFile(SPEND), JSON.stringify({ ts: new Date().toISOString(), pid, contract: to, paid, bnb: Number(total) / 1e18, ...(usdNow != null ? { usd: usdNow } : {}), ...(SHARE ? { share: true } : {}), tx, ...(WTAG ? { wallet: WTAG } : {}) }) + '\n'); }
 catch (e) { console.error(`❌❌ 交易已广播（${tx}），但花费账本写入失败：${e.message}。请手动把这笔记到 data/spend.jsonl，否则付费上限会算少。`); }
-log('execute', `铸造 ${qty} 张（免费 ${free} + 付费 ${paid}）`, { tx, contract: to, value: `${(Number(total) / 1e18).toFixed(6)} BNB` });
+log('execute', `${SHARE ? '按份铸币' : '铸造'} ${qty} ${SHARE ? '份' : '张'}（免费 ${free} + 付费 ${paid}）`, { tx, contract: to, value: `${(Number(total) / 1e18).toFixed(6)} BNB` });
 const rc = await waitReceipt(tx);
 if (!rc) { console.log('回执还没出来，稍后在 BscScan 查：' + tx); process.exit(3); }
 const ids = nftIdsReceived(rc, to, W);

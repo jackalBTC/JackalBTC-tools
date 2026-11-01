@@ -84,14 +84,17 @@ Claude 会跟踪雷达日志：免费且通过核验的项目自动打，拿不�
 
 无论怎么配，自动付费都还要求「合约源码已验证 + 有官网或官推」，并且预演里不能有授权、额外扣款或风险提示。被识别为批量模板的项目、防骗检查（`npm run devcheck -- <合约>`）不通过的项目，只拿免费张。
 
+**付费按份铸币**（按份付 BNB、铸满才开池的发射）单独走 `npm run share-mint`：进度 ≥ 本机门槛、每钱包每项目 ≤ `shareMint.budgetUsd`（默认 30 美元）、铸造合约和代币合约都验证源码、AI 读完源码在台账写下审查记录、防骗检查不是「拦」——五道关口全过才让所有钱包自动参与，否则只出简报。`shareMint.enabled` 默认 `false`（只评估、只出简报）；USDT 付款的一律只出简报。详见上层 README「付费按份铸币」。
+
 ## 目录
 
 ```
 .claude/skills/binance-ai-wallet-tools/  给 AI 的规则（防投毒、每步日志、决策三档、铸造流程）
 config/config.example.json               配置模板（setup 生成 config/config.json，不进 git）
 src/radar/                               推特雷达 + 两个数据源
-src/cli/                                 mint（安全铸造）、mint-all（多钱包依次铸造）、screen（合约筛查）、devcheck（付费项目防骗检查）、pow（工作量证明）、log（日志）、doctor（自检）
+src/cli/                                 mint（安全铸造）、mint-all（多钱包依次铸造）、share-mint（付费按份铸币，五道关口）、screen（合约筛查）、devcheck（付费项目防骗检查）、pow（工作量证明）、log（日志）、doctor（自检）
 src/lib/rules.mjs                        花钱规则与预演检查（test/ 里有单元测试，npm test）
+src/lib/sharemint.mjs                    按份铸币的五道关口、进度读取、预算（有单元测试）
 src/server/                              本地只读看板
 src/telegram/                            Telegram 机器人（推送 + 只读查询）
 src/auto/                                后台自动任务（可选）：Element 市场监控、授权巡检（只读）、成本自检、到点领取 / 自动兑换 / 自动止盈（会发交易，默认关，见 docs/auto.md）

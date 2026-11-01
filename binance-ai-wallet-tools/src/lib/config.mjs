@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { validateShareMint } from './sharemint.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 export const CONFIG_FILE = path.join(ROOT, 'config/config.json');
@@ -53,6 +54,8 @@ function validate(cfg) {
     if (!num(aw.everyMinutes, 5)) errs.push('approvalWatch.everyMinutes 至少 5');
   }
   if (cfg.costAudit && typeof cfg.costAudit.enabled !== 'boolean') errs.push('costAudit.enabled 必须是 true 或 false');
+  // 付费按份铸币（npm run share-mint）：开关必须明确写 true / false；预算是每个钱包每个项目最多花多少美元
+  errs.push(...validateShareMint(cfg.shareMint));
   // 会发交易的自动功能：开关必须明确写 true / false，写错直接退出（不会因为写成 "true" 字符串就悄悄打开或关掉）
   for (const k of ['claims', 'redeem', 'takeProfit']) {
     const a = cfg.auto?.[k];

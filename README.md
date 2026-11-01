@@ -1,6 +1,6 @@
 # 币安 AI 钱包工具（binance-ai-wallet-tools）
 
-[English](README.en.md) · JackalBTC 的工具库 · 当前版本 **v0.4.1** · [更新日志](CHANGELOG.md)
+[English](README.en.md) · JackalBTC 的工具库 · 当前版本 **v0.4.2** · [更新日志](CHANGELOG.md)
 
 > ⚠️ 和链上资产有关，**不构成投资建议**。默认只打免费的；使用前请先读[使用前请先知道](#使用前请先知道)和[安全设计](#安全设计)。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 日期 | 更新了什么 |
 |---|---|---|
+| **v0.4.2 付费按份铸币** | 2026-11-01 | 新命令 `share-mint`：按份付 BNB、铸满才开池的项目，五道关口（进度 ≥ 本机门槛、每钱包每项目预算 30 美元、铸造合约和代币合约都验证源码、AI 读源码写下审查记录、防骗检查不是「拦」）全过才让所有钱包自动参与，否则只出简报；默认关（`shareMint.enabled`），USDT 付款的只出简报 |
 | **v0.4.1 防骗与成本安全** | 2026-11-01 | 付费前自动跑防骗检查（按真实发交易的人数算、诱饵盘、垃圾图、批量同款合约，门槛每台机器随机），新命令 `devcheck`；代币价格加上 GeckoTerminal（能看到 v4 池子），持仓现值按池子流动性 3 成封顶；授权巡检（新授权提醒，只读）；止盈读不到 BNB 价格时用上一次的价格、成本绝不按 0 算，花费账付过钱但持仓成本为空的自动补上 |
 | **v0.4.0 市场监控与自动任务** | 2026-11-01 | 看板持仓按「能卖 / 有市场没买家 / 新打的 / 沉寂 / 已清仓」分组，清仓的显示累计成本、收回和净盈亏；Element 链上成交 / 求购监控（只读）；可选的到点自动领取、卡换代币、自动止盈（会发交易，默认关）；雷达可选 Flap Agent 新盘提醒 |
 | **v0.3.3 只推要花钱的** | 2026-10-31 | TG 免费铸造成功不再逐笔推（看每晚总结），新增「付费项目简报」响铃提醒；`/holdings` `/pnl` 查持仓和战绩 |
@@ -37,6 +38,7 @@
   - [10. 安装向导、自检、后台托管、隐私检查](#10-安装向导自检后台托管隐私检查)
   - [11. 多钱包](#11-多钱包)
   - [12. 后台自动任务 auto](#12-后台自动任务-auto)
+  - [13. 付费按份铸币 share-mint](#13-付费按份铸币-share-mint)
 - [安全设计](#安全设计)
 - [安装与上手](#安装与上手)
 - [配置说明](#配置说明)
@@ -249,7 +251,7 @@
 | `npm run doctor` | 自检：Node、依赖、baw、钱包登录、开发者模式、BNB、配置、推特 Key、Telegram |
 | `npm run service install / status / uninstall` | 后台托管雷达、看板、Telegram 机器人、后台自动任务（打开了才托管），崩了自动重启（macOS 用 launchd；其他系统给出 pm2 命令） |
 | `npm run check` | 发布前隐私检查：扫出钱包地址、交易哈希、本机路径、邮箱、疑似密钥和助记词 |
-| `npm test` | 91 个单元测试：花钱规则、预演检查、报价识别、Telegram 消息格式、多钱包、止盈阶段、Element 日志解析、看板分组、自动领取 / 兑换的检查、防骗检查、取价与估值封顶、授权巡检、成本自检 |
+| `npm test` | 115 个单元测试：花钱规则、预演检查、报价识别、Telegram 消息格式、多钱包、止盈阶段、Element 日志解析、看板分组、自动领取 / 兑换的检查、防骗检查、取价与估值封顶、授权巡检、成本自检、按份铸币的关口 / 进度 / 预算 |
 
 另外：仓库里的 GitHub Actions 会在每次提交时，自动跑语法检查、单元测试和隐私检查。
 
@@ -297,6 +299,34 @@
 - 都走 `baw contract-call preview` → `execute`（止盈走 `baw market-order swap`），和 mint 共用锁、每步写日志、执行前核对钱包会话。**不签 Permit / Permit2，不用 setApprovalForAll，不授权、不转账。**
 - 改了配置要重新运行 `npm run service install` 才生效。
 
+### 13. 付费按份铸币 share-mint
+`src/cli/share-mint.mjs`（纯逻辑在 `src/lib/sharemint.mjs`，有单元测试）· `npm run share-mint -- <项目id> <铸造合约> --qty <份数> [--fn …] [--args …] [--sold-fn "totalMinted()"] [--cap-fn "maxShares()"] [--cap <份数>] [--token <代币合约>] [--pay bnb|usdt] [--dry]`
+
+「按份铸币」是一类发射玩法：大家按份付 BNB（或 USDT）买一个代币的份额，**铸满**（已铸份数达到开池所需份数）才开流动性。这类项目要花钱，所以不走普通的 `mint` 花钱规则，而是单独的五道关口，**全部通过**才让所有钱包自动参与；任何一道不过，只写一条简报（`brief`）、退出码 2，不发任何交易。
+
+| 关口 | 通过条件 |
+|---|---|
+| ① 进度 | 已铸份数 / 开池所需份数 ≥ 本机随机门槛（`devcheck --thresholds` 里的付费按份铸币进度，60–70%）。读数拿不准（几个函数读出来不一致）、读不到、超过 100%（多半是单位不一致）都算不过 |
+| ② 预算 | 每个钱包在这个项目累计花费 ≤ `shareMint.budgetUsd`（默认 30 美元）。BNB 按 Chainlink 价格折算，之前在这个项目花过的从 `data/spend.jsonl` 算。**只支持 BNB 付款**：USDT 付款要先授权代币，本工具的自动流程从不授权，所以一律只出简报 |
+| ③ 源码验证 | 铸造合约**和**代币合约都在 Sourcify 验证了源码（代理合约要求实现合约也验证） |
+| ④ 源码审查 | 代码判断不了的，由 AI 读完源码后在台账该项目里写 `review`：铸造收的钱留在合约里、没有地址能随意提走、代币铸造入口额度为 0 或已锁、开池后 LP 打到销毁地址——四项都是 `true` 才算过 |
+| ⑤ 防骗检查 | `devcheck` 不是「拦」；检查没跑完也算不过 |
+
+台账里的审查记录（`data/projects.json` 该项目的条目）：
+
+```json
+"contracts": { "mint": "0x…", "token": "0x…" },
+"review": { "fundsStay": true, "noWithdraw": true, "mintLocked": true, "lpBurned": true,
+            "by": "ai", "at": "2026-11-01T08:00:00Z", "contract": "0x…（铸造合约）", "token": "0x…（代币合约）", "notes": "依据：哪个函数、哪一行" }
+```
+
+进度怎么读：不写 `--sold-fn` / `--cap-fn` 时，用 eth_call 试常见的无参数只读函数——已铸：`totalMinted` `totalSold` `sold` `minted` `mintedShares` `sharesSold` `soldShares`（都读不到才用 `totalSupply`）；上限：`maxShares` `MAX_SHARES` `totalShares` `cap` `hardCap` `MAX_SUPPLY` `maxSupply`。每个关口都写一条 `verify` 日志。
+
+- **开关**：`shareMint.enabled` 默认 `false`——只评估、只出简报（五关全过也只写简报，退出码 3）。改成 `true` 后，五关全过时签一张 30 分钟有效的一次性通行证，交给 `mint-all` 让所有钱包（先主后副，**副钱包也付费，不看 `allowPaid`**）各买 `--qty` 份；某个钱包剩下的预算不够就减份数，减到 0 跳过这个钱包。
+- 每个钱包仍然走 `mint` 的全部检查：会话核对、按报价模拟、币安预演（除了付给本合约的 BNB 不能有任何扣款、授权、风险提示）、锁、日志、记账。设了 `spending.maxDailyBnb` 的话每日上限照样算。
+- `--dry` 只评估、不写日志；五关全过时再给出每个钱包的计划。
+- `mint` / `mint-all` 收到 `--share-mint` 时会核对 `data/share-mint-gate.json` 里的通行证（项目、合约、30 分钟内），所以单独加这个参数绕不过五道关口。
+
 ## 安全设计
 
 | 风险 | 怎么防 |
@@ -305,6 +335,7 @@
 | 合约偷偷扣钱、要授权 | 每笔交易先走币安官方预演，有额外扣款、授权、风险提示就不执行（写死在代码里） |
 | AI 一直花钱 | 默认只打免费；付费要你自己开，并受单价、每项目累计、每天三道上限约束；同一时间只跑一个 |
 | 刷进度、诱饵盘、垃圾图、批量部署的付费盘 | 付费前自动跑防骗检查，有「拦」或没跑完付费部分就不打；门槛每台机器随机 |
+| 按份铸币的项目方卷款、不开池 | `share-mint` 五道关口全过才参与（进度、预算、两个合约都验证源码、AI 读源码确认钱留在合约里 / 没人能提走 / 铸造入口锁死 / LP 销毁、防骗检查），默认关；每个钱包每个项目最多花 30 美元 |
 | 钱包里多了不认识的授权 | 授权巡检每 30 分钟看一次，新授权推送，无限额 / 有风险的响铃（只提醒，撤销要你自己做） |
 | 后台自动卖币 / 领取 / 兑换出错 | 默认全关；打开后每笔都先模拟、再预演，有扣款、授权、风险提示就不执行；止盈只卖登记的代币、只换回 BNB |
 | 配置写错 | 类型或格式不对直接报错退出，不会悄悄按别的值运行 |
@@ -376,6 +407,8 @@ claude                     # 在本目录打开 Claude Code（或 codex）
 | | `minFills` / `minFillUsd` / `minBidUsd` | `3` / `2` / `5` | 提醒规则：近 3 天成交笔数和最近一笔价格，或收我们编号的求购价 |
 | `approvalWatch` | `enabled` / `everyMinutes` | `true` / `30` | 授权巡检（只读，只提醒） |
 | `costAudit` | `enabled` | `true` | 成本自检（每小时，只补持仓里空 / 0 的成本） |
+| `shareMint` | `enabled` | `false` | 付费按份铸币：关 = 只评估、只出简报；开 = 五道关口全过时所有钱包按预算自动参与（见[付费按份铸币](#13-付费按份铸币-share-mint)） |
+| | `budgetUsd` | `30` | 每个钱包在每个项目最多花多少美元（之前花过的也算） |
 | `auto` | `claims.enabled` | `false` | 到点自动领取 `data/claims.json` 里登记的代币（会发交易） |
 | | `redeem.enabled` / `everyMinutes` / `firstBlocks` | `false` / `10` / `20000` | 卡换代币（会发交易） |
 | | `takeProfit.enabled` / `everyMinutes` / `slippage` | `false` / `2` / `10` | 自动止盈（会卖币），滑点百分比 |
@@ -390,7 +423,8 @@ claude                     # 在本目录打开 Claude Code（或 codex）
 | `watch.json` | 持仓：`collections`（NFT 系列：合约、持有编号、成本、市场配置，mint 会自动维护）和 `tokens`（代币：`{ id, name, symbol, contract, cost: { BNB 或 USDT } }`，花钱换到的币由 AI 加进来；可选的止盈字段 `hold`、`sellOnce`、`firstTp`、`ladder`、`back3`；系列或代币可标 `writtenOff: { label, note }` 表示已核销） |
 | `realized.json` | 已实现盈亏：每次卖出记一条 `{ ts, project, name, cost: {…}, proceeds: {…}, tx? }`，看板的盈亏台账按它算；副钱包的记录加 `wallet` |
 | `events.jsonl` | 每一步操作日志（只追加） |
-| `spend.jsonl` | 花费账本（每日 / 每项目上限按它算；多钱包时每条带 `wallet`） |
+| `spend.jsonl` | 花费账本（每日 / 每项目上限按它算；多钱包时每条带 `wallet`；v0.4.2 起每条记下当时的美元数 `usd`，按份铸币的预算按它算） |
+| `share-mint-gate.json` | 按份铸币的一次性通行证（`share-mint` 五关全过时写，30 分钟有效，跑完删除） |
 | `news.json` | 已参与项目的中文动态总结 |
 | `watch-accounts.json` | 跟踪的官推 |
 | `fingerprints.json` | 合约接口指纹（识别批量模板） |

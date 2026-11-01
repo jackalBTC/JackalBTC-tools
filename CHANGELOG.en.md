@@ -6,6 +6,26 @@ What changed in each version, newest first. To upgrade: `git pull` in the repo, 
 
 ---
 
+## v0.4.2 — 2026-11-01 · Paid share-mints
+
+### New
+- **Paid share-mints** (launches where you buy shares of a token with BNB and liquidity opens once fully minted): new command `npm run share-mint -- <projectId> <mintContract> --qty <shares>`. All wallets join automatically **only when all five gates pass**; if any fails it writes a brief and sends nothing:
+  - ① progress (shares minted / shares needed to open the pool) ≥ this install's random threshold (the "paid share-mint progress" from v0.4.1). Common view functions are tried automatically (`totalMinted` `sold` `maxShares` `cap` `MAX_SUPPLY` …), or set them with `--sold-fn` / `--cap-fn` / `--cap`; readings that disagree, can't be read or exceed 100% fail;
+  - ② each wallet spends at most `shareMint.budgetUsd` per project in total (default $30), BNB converted with Chainlink, earlier spend included; shares are reduced to fit, and a wallet with nothing left is skipped;
+  - ③ the mint contract and the token contract are both source-verified on Sourcify;
+  - ④ the AI has read the source and recorded a `review` in the ledger (funds stay in the contract, no one can withdraw them at will, the token's mint entry is 0 or locked, LP goes to a burn address) with all four `true`;
+  - ⑤ the anti-scam check is not "block"; an unfinished check fails too.
+- New `shareMint` config: `enabled` defaults to `false` (evaluate and brief only), `budgetUsd` defaults to `30`. Wrong types exit with an error.
+- Each `spend.jsonl` entry now records its USD value at the time (`usd`), which the budget uses.
+
+### Security
+- BNB payment only. Paying in USDT needs a token approval, which the automatic flow never grants, so those are always brief-only. No approval, Permit / Permit2, setApprovalForAll or transfer code was added.
+- Each wallet still goes through all of `mint`'s checks: session check, simulation at the quoted price, Binance preview (no debit other than the BNB paid to this contract, no approvals, no risk flags), one at a time, every step logged. A daily cap, if set, still applies.
+- `mint` / `mint-all` only run in share-mint mode with a pass issued by `share-mint` after all five gates pass (same project and contract, within 30 minutes), so a flag alone can't skip the gates.
+- The source-review gate relies on the AI filling it in honestly (code can't tell whether the money can be taken); the rules say never to set `true` without reading the source. The per-wallet, per-project budget remains the real backstop.
+
+---
+
 ## v0.4.1 — 2026-11-01 · Scam checks and cost safety
 
 ### New

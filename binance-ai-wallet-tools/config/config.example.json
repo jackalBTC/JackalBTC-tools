@@ -142,6 +142,13 @@
     "enabled": true,
     "everyMinutes": 30
   },
+  "shareMint": {
+    "_说明": "付费按份铸币（npm run share-mint）：按份付 BNB 买发射项目的份额、铸满才开池的那种。五道关口（进度 ≥ 本机门槛、预算、铸造合约和代币合约都验证源码、AI 读源码写了审查记录、防骗检查不是「拦」）全过才会让所有钱包自动参与；任何一道不过只出简报。见 README「付费按份铸币」",
+    "enabled": false,
+    "_enabled": "false = 只评估、只出简报，不发交易；true = 五关全过时所有钱包（含副钱包，不看 allowPaid）按预算自动参与。只支持 BNB 付款，USDT 付款的只出简报",
+    "budgetUsd": 30,
+    "_budgetUsd": "每个钱包在每个项目最多花多少美元（BNB 按 Chainlink 价格折算；之前在这个项目花过的也算进去）"
+  },
   "costAudit": {
     "_说明": "成本自检：每小时一次，花费账 spend.jsonl 里付过 BNB、持仓 watch.json 里成本却是空 / 0 的系列，按账上实际付出补上并发一条通知。不发交易。由后台服务 auto 运行",
     "enabled": true

@@ -4,6 +4,8 @@
 //   - 钱包之间随机间隔 20–60 秒，避免同一时刻一起打
 //   - 主钱包没打成：如果只是它自己的额度用完 / 付费到上限，副钱包照常继续；其他原因（预演不过、合约有问题、会话不对）整批停
 //   - 有任何一个钱包没打成，最后以非 0 退出
+//   - --share-mint <通行证>：付费按份铸币，只由 src/cli/share-mint.mjs 在五关全过后传入；每个钱包都按 shareMint 预算付费（不加 --free-only），
+//     不能和 --free-only / --paid-all 一起用；mint.mjs 会再核对通行证
 // 用法: node src/cli/mint-all.mjs <项目id> <合约> <数量> [--fn ...] [--args ...] [--free-only] [--paid-all] [--skip-main] [--only id1,id2] [--dry]
 import { spawn } from 'node:child_process';
 import path from 'node:path';
@@ -17,12 +19,13 @@ const MINT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'mint.mjs')
 const argv = process.argv.slice(2), pos = [], o = {};
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
-  if (['--fn', '--args', '--only'].includes(a)) { if (argv[i + 1] == null) { console.error(`${a} 后面缺少值\n${USAGE}`); process.exit(1); } o[a.slice(2)] = argv[++i]; }
+  if (['--fn', '--args', '--only', '--share-mint'].includes(a)) { if (argv[i + 1] == null) { console.error(`${a} 后面缺少值\n${USAGE}`); process.exit(1); } o[a.slice(2)] = argv[++i]; }
   else if (['--free-only', '--paid-all', '--skip-main', '--dry'].includes(a)) o[a.slice(2)] = true;
   else if (a.startsWith('-')) { console.error(`不认识的参数 ${a}（为了安全，拼错的参数不会被忽略）\n${USAGE}`); process.exit(1); }
   else pos.push(a);
 }
 if (pos.length !== 3) { console.error(USAGE); process.exit(1); }   // 其余格式由 mint.mjs 校验
+if (o['share-mint'] != null && (o['free-only'] || o['paid-all'])) { console.error('--share-mint 不能和 --free-only / --paid-all 一起用'); process.exit(1); }
 
 let wallets;
 try { wallets = readWallets(); } catch (e) { console.error(e.message); process.exit(1); }
@@ -41,7 +44,8 @@ function run(w) {
   const args = [MINT, ...pos, '--wallet', w.id];
   if (o.fn) args.push('--fn', o.fn);
   if (o.args) args.push('--args', o.args);
-  if (o['free-only'] || (!w.main && !o['paid-all'])) args.push('--free-only');
+  if (o['share-mint'] != null) args.push('--share-mint', o['share-mint']);
+  else if (o['free-only'] || (!w.main && !o['paid-all'])) args.push('--free-only');
   if (o.dry) args.push('--dry');
   return new Promise(res => {
     const p = spawn(process.execPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });

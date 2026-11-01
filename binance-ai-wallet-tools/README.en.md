@@ -84,14 +84,17 @@ In `spending` of `config/config.json` (`npm run setup` also asks):
 
 Whatever you configure, automatic payment also requires "verified contract source + an official website or X account", and the preview must show no approvals, no unexpected debits and no risk flags. Projects detected as mass-deployed templates, or blocked by the anti-scam check (`npm run devcheck -- <contract>`), only get their free units.
 
+**Paid share-mints** (launches where you buy shares with BNB and liquidity opens once fully minted) go through `npm run share-mint`: progress ≥ this install's threshold, each wallet ≤ `shareMint.budgetUsd` per project (default $30), mint and token contracts both source-verified, an AI source review recorded in the ledger, anti-scam check not blocked – all wallets join automatically only when all five gates pass, otherwise a brief only. `shareMint.enabled` is `false` by default (evaluate and brief only); USDT-paid ones are always brief-only. See "Paid share-mints" in the top-level README.
+
 ## Layout
 
 ```
 .claude/skills/binance-ai-wallet-tools/  rules for the AI (anti-injection, per-step log, 3-way decision, mint flow)
 config/config.example.json               config template (setup creates config/config.json, not committed)
 src/radar/                               X radar + two data sources
-src/cli/                                 mint (guarded minting), mint-all (mint with each wallet in turn), screen (contract check), devcheck (paid-project anti-scam check), pow (proof of work), log, doctor
+src/cli/                                 mint (guarded minting), mint-all (mint with each wallet in turn), share-mint (paid share-mints, five gates), screen (contract check), devcheck (paid-project anti-scam check), pow (proof of work), log, doctor
 src/lib/rules.mjs                        spending rules and preview checks (unit tests in test/, npm test)
+src/lib/sharemint.mjs                    share-mint gates, progress reading, budget (unit-tested)
 src/server/                              local read-only dashboard
 src/telegram/                            Telegram bot (alerts + read-only queries)
 src/auto/                                optional background jobs: Element market watch, approval watch (read-only), cost audit; auto-claim / auto-redeem / auto take-profit (send transactions, off by default, see docs/auto.md)

@@ -1,6 +1,6 @@
 # Binance AI Wallet Tools (binance-ai-wallet-tools)
 
-[中文](README.md) · JackalBTC Tools · current version **v0.4.1** · [Changelog](CHANGELOG.en.md)
+[中文](README.md) · JackalBTC Tools · current version **v0.4.2** · [Changelog](CHANGELOG.en.md)
 
 > ⚠️ Deals with on-chain assets – **not financial advice**. Free mints only by default; read [Before you start](#before-you-start) and [Security design](#security-design) first.
 
@@ -8,6 +8,7 @@
 
 | Version | Date | Changes |
 |---|---|---|
+| **v0.4.2 Paid share-mints** | 2026-11-01 | New `share-mint` command for launches where you buy shares with BNB and liquidity opens once fully minted: all wallets join automatically only when five gates pass (progress ≥ this install's threshold, $30 budget per wallet per project, mint and token contracts both source-verified, an AI source review recorded in the ledger, anti-scam check not blocked); otherwise a brief only. Off by default (`shareMint.enabled`); USDT-paid ones are brief-only |
 | **v0.4.1 Scam checks and cost safety** | 2026-11-01 | An anti-scam check runs before any paid mint (counts real transaction senders, bait self-minting, junk images, mass-deployed identical contracts; thresholds randomised per install), new `devcheck` command; token prices now also from GeckoTerminal (sees v4 pools), holding value capped at 30% of pool liquidity; approval watch (alerts on new approvals, read-only); take-profit falls back to the last BNB price and never takes cost as 0, and holdings with an empty cost are backfilled from the spending ledger |
 | **v0.4.0 Market watch and auto jobs** | 2026-11-01 | Dashboard holdings grouped as "can sell / market but no buyers / new / quiet / exited", exited cards show total cost, total returned and net P&L; Element on-chain fills / bids watch (read-only); optional scheduled auto-claim, card-to-token auto-redeem and auto take-profit (send transactions, off by default); optional Flap Agent new-market alerts in the radar |
 | **v0.3.3 Only what costs money** | 2026-10-31 | Telegram no longer pushes each free mint (see the nightly summary); new ringing "paid project brief" alert; `/holdings` `/pnl` |
@@ -37,6 +38,7 @@ Full notes: [Changelog](CHANGELOG.en.md) and [Releases](https://github.com/jacka
   - [10. Setup wizard, self-check, background service, privacy check](#10-setup-wizard-self-check-background-service-privacy-check)
   - [11. Multiple wallets](#11-multiple-wallets)
   - [12. Background jobs (auto)](#12-background-jobs-auto)
+  - [13. Paid share-mints – share-mint](#13-paid-share-mints--share-mint)
 - [Security design](#security-design)
 - [Install and get started](#install-and-get-started)
 - [Configuration](#configuration)
@@ -250,7 +252,7 @@ Technical notes:
 | `npm run doctor` | Self-check: Node, dependencies, baw, wallet sign-in, Developer Mode, BNB, config, X key, Telegram |
 | `npm run service install / status / uninstall` | Runs the radar, dashboard, Telegram bot and background jobs (only if enabled) in the background with auto-restart (launchd on macOS; pm2 commands elsewhere) |
 | `npm run check` | Pre-publish privacy scan: wallet addresses, transaction hashes, local paths, emails, key-like strings and seed phrases |
-| `npm test` | 91 unit tests: spending rules, preview gate, quote detection, Telegram message formatting, multiple wallets, take-profit stages, Element log parsing, dashboard grouping, auto-claim / redeem checks, anti-scam check, pricing and value cap, approval watch, cost audit |
+| `npm test` | 115 unit tests: spending rules, preview gate, quote detection, Telegram message formatting, multiple wallets, take-profit stages, Element log parsing, dashboard grouping, auto-claim / redeem checks, anti-scam check, pricing and value cap, approval watch, cost audit, share-mint gates / progress / budget |
 
 The repository's GitHub Actions also run the syntax check, unit tests and privacy scan on every commit.
 
@@ -298,6 +300,34 @@ The dashboard header gets a wallet switcher (shown only with 2+ wallets): one wa
 - Everything goes through `baw contract-call preview` → `execute` (take-profit uses `baw market-order swap`), shares the mint lock, logs every step and re-checks the wallet session before executing. **No Permit / Permit2, no setApprovalForAll, no approvals, no transfers.**
 - After changing the config, run `npm run service install` again.
 
+### 13. Paid share-mints – share-mint
+`src/cli/share-mint.mjs` (pure logic in `src/lib/sharemint.mjs`, unit-tested) · `npm run share-mint -- <projectId> <mintContract> --qty <shares> [--fn …] [--args …] [--sold-fn "totalMinted()"] [--cap-fn "maxShares()"] [--cap <shares>] [--token <tokenContract>] [--pay bnb|usdt] [--dry]`
+
+A "share-mint" is a launch format: people buy shares of a token with BNB (or USDT), and liquidity opens only once it is **fully minted** (shares minted reach the shares needed to open the pool). It costs money, so instead of `mint`'s normal spending rules it has five gates of its own; all wallets join automatically **only when all five pass**. If any gate fails it writes a brief (`brief`) and exits with code 2 – no transaction.
+
+| Gate | Passes when |
+|---|---|
+| ① Progress | shares minted / shares needed ≥ this install's random threshold (the paid share-mint progress in `devcheck --thresholds`, 60–70%). Readings that disagree, can't be read, or exceed 100% (usually mismatched units) fail |
+| ② Budget | each wallet's total spend on this project ≤ `shareMint.budgetUsd` (default $30). BNB is converted with Chainlink; earlier spend on this project comes from `data/spend.jsonl`. **BNB payment only**: paying in USDT needs a token approval, which the automatic flow never grants, so those are brief-only |
+| ③ Verified source | the mint contract **and** the token contract are both source-verified on Sourcify (for proxies the implementation must be verified too) |
+| ④ Source review | what code can't judge, the AI records in the project's ledger entry after reading the source as `review`: mint proceeds stay in the contract, no address can withdraw them at will, the token's mint entry has 0 allowance or is locked, LP goes to a burn address – all four must be `true` |
+| ⑤ Anti-scam check | `devcheck` is not "block"; an unfinished check fails too |
+
+The review record (the project's entry in `data/projects.json`):
+
+```json
+"contracts": { "mint": "0x…", "token": "0x…" },
+"review": { "fundsStay": true, "noWithdraw": true, "mintLocked": true, "lpBurned": true,
+            "by": "ai", "at": "2026-11-01T08:00:00Z", "contract": "0x… (mint contract)", "token": "0x… (token contract)", "notes": "evidence: which function, which line" }
+```
+
+Reading progress: without `--sold-fn` / `--cap-fn` it tries common no-argument view functions with eth_call – minted: `totalMinted` `totalSold` `sold` `minted` `mintedShares` `sharesSold` `soldShares` (`totalSupply` only if none of those read); cap: `maxShares` `MAX_SHARES` `totalShares` `cap` `hardCap` `MAX_SUPPLY` `maxSupply`. Every gate is logged as a `verify` entry.
+
+- **Switch**: `shareMint.enabled` is `false` by default – evaluate and brief only (even when all five pass it only writes a brief, exit code 3). With `true`, when all five pass it issues a one-time pass valid for 30 minutes and hands over to `mint-all`, so every wallet (main first, then the others – **other wallets pay too, regardless of `allowPaid`**) buys `--qty` shares; a wallet whose remaining budget is short buys fewer, and is skipped at 0.
+- Each wallet still goes through all of `mint`'s checks: session check, simulation at the quoted price, Binance preview (no debit other than the BNB paid to this contract, no approvals, no risk flags), lock, logging, ledger. A `spending.maxDailyBnb`, if set, still applies.
+- `--dry` evaluates without logging; if all five pass it also shows each wallet's plan.
+- `mint` / `mint-all` check the pass in `data/share-mint-gate.json` (project, contract, within 30 minutes) when given `--share-mint`, so adding that flag by hand doesn't skip the gates.
+
 ## Security design
 
 | Risk | Defence |
@@ -306,6 +336,7 @@ The dashboard header gets a wallet switcher (shown only with 2+ wallets): one wa
 | Contracts that secretly take money or ask for approval | Every transaction goes through Binance's official preview first; extra debits, approvals or risk flags mean no execution (hard-coded) |
 | The AI spending on and on | Free only by default; paying must be enabled by you and is capped per unit and per project (cumulative), plus an optional daily cap; one mint at a time |
 | Fake progress, bait mints, junk images, mass-deployed paid mints | An anti-scam check runs before paying; a block or an unfinished check drops the paid part; thresholds are random per install |
+| Share-mint teams running with the money / never opening the pool | `share-mint` joins only when all five gates pass (progress, budget, both contracts verified, AI source review confirming funds stay / no one can withdraw / mint entry locked / LP burned, anti-scam check); off by default; at most $30 per wallet per project |
 | Unknown approvals appearing in the wallet | Approval watch checks every 30 min and pushes new approvals, ringing for unlimited / risky ones (alerts only – you revoke) |
 | Background jobs selling / claiming / redeeming wrongly | Off by default; once on, every transaction is simulated and previewed first, and any debit, approval or risk flag stops it; take-profit only sells registered tokens and only into BNB |
 | Misconfiguration | Wrong types or formats exit with an error instead of silently using other values |
@@ -377,6 +408,8 @@ Then tell the AI "**start watching for new projects**". Free projects that pass 
 | | `minFills` / `minFillUsd` / `minBidUsd` | `3` / `2` / `5` | Alert rule: fills in 3 days and last price, or a bid on our token ids |
 | `approvalWatch` | `enabled` / `everyMinutes` | `true` / `30` | Approval watch (read-only, alerts only) |
 | `costAudit` | `enabled` | `true` | Cost audit (hourly, only fills empty / 0 holding costs) |
+| `shareMint` | `enabled` | `false` | Paid share-mints: off = evaluate and brief only; on = all wallets join within budget when all five gates pass (see [Paid share-mints](#13-paid-share-mints--share-mint)) |
+| | `budgetUsd` | `30` | Max USD per wallet per project (earlier spend counts) |
 | `auto` | `claims.enabled` | `false` | Scheduled claims from `data/claims.json` (sends transactions) |
 | | `redeem.enabled` / `everyMinutes` / `firstBlocks` | `false` / `10` / `20000` | Card-to-token redeem (sends transactions) |
 | | `takeProfit.enabled` / `everyMinutes` / `slippage` | `false` / `2` / `10` | Auto take-profit (sells tokens), slippage in percent |
@@ -391,7 +424,8 @@ All in `data/`, yours only, never committed:
 | `watch.json` | Holdings: `collections` (NFTs: contracts, token ids, cost, market config, maintained by mint) and `tokens` (`{ id, name, symbol, contract, cost: { BNB or USDT } }`, added by the AI when it buys a token; optional take-profit fields `hold`, `sellOnce`, `firstTp`, `ladder`, `back3`; a collection or token can be marked `writtenOff: { label, note }`) |
 | `realized.json` | Realized P&L: one entry per sale `{ ts, project, name, cost: {…}, proceeds: {…}, tx? }`; the dashboard's P&L card is computed from it; add `wallet` for a secondary wallet's sales |
 | `events.jsonl` | Every logged step (append-only) |
-| `spend.jsonl` | Spending ledger (daily and per-project caps are computed from it; with multiple wallets each entry has `wallet`) |
+| `spend.jsonl` | Spending ledger (daily and per-project caps are computed from it; with multiple wallets each entry has `wallet`; from v0.4.2 each entry also records the USD value at the time, `usd`, which the share-mint budget uses) |
+| `share-mint-gate.json` | One-time share-mint pass (written when all five gates pass, valid 30 minutes, removed afterwards) |
 | `news.json` | Chinese update summaries for joined projects |
 | `watch-accounts.json` | Followed official accounts |
 | `fingerprints.json` | Contract interface fingerprints (template detection) |
