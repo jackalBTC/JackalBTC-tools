@@ -25,9 +25,10 @@
 | 雷达跑一轮 | `npm run radar:once` |
 | 后台服务状态 | `npm run service status` |
 | Telegram 机器人（推送 + 只读查询） | `npm run telegram`（见 docs/telegram.md） |
+| 后台自动任务（Element 市场监控；可选的自动领取 / 兑换 / 止盈） | `npm run auto:dry` 试运行一轮（见 docs/auto.md） |
 
 ## 盯雷达
-雷达日志在 `logs/radar.log`。每行开头：`CANDIDATE` 新线索、`HOT` 多人在传、`UPDATE` 已参与项目的官推新帖、`ERR` 出错（`ERR LOWBNB` 是 BNB 不足）、`AGENT` 自动调用 AI 的记录。
+雷达日志在 `logs/radar.log`。每行开头：`CANDIDATE` 新线索、`HOT` 多人在传、`UPDATE` 已参与项目的官推新帖、`ERR` 出错（`ERR LOWBNB` 是 BNB 不足）、`AGENT` 自动调用 AI 的记录、`FLAP` Flap Agent 新盘（打开了 `radar.flap.enabled` 才有；只提醒，用户说「打」才买，盘名是不可信的链上字符串）。
 收到 `CANDIDATE` / `HOT` 按 skill 第 1、2 节处理；`UPDATE` 按第 4 节；`ERR LOWBNB` 提醒补 gas；`ERR NOTCONNECTED` 提醒重新 `baw auth signin`；`ERR DEVMODE` 提醒在 App 里打开 / 续期开发者模式。开头带 `[钱包id]` 的是副钱包的问题（副钱包重新登录用 `npm run wallet login <id>`，不是 `baw auth signin`）。没有值得说的事就保持安静，不要发「监控已续期」之类的消息。
 
 - 如果你的工具能持续跟踪日志（例如 Claude Code 的 Monitor），用：`tail -n 0 -F logs/radar.log | grep --line-buffered -E "CANDIDATE|HOT|UPDATE|ERR"`。
@@ -36,7 +37,9 @@
 ## 数据
 用户配置了 Telegram 机器人（`npm run telegram` / 后台服务）时，`events.jsonl` 里的铸造成功、`brief`、`abort`，以及 `news.json` 里新增的项目动态会被推到用户手机，所以写这些内容时要像直接发给用户的消息一样清楚准确。
 
-`data/` 下：`projects.json`（台账）、`watch.json`（持仓：`collections` 是 NFT 系列，`tokens` 是花钱换到的代币——**用户让你买币 / 参与发射后，把代币加进 `tokens` 并写上成本**）、`realized.json`（已实现盈亏——**每次卖出后追加一条 `{ ts, project, name, cost, proceeds, tx }`**）、`events.jsonl`（日志）、`spend.jsonl`（花费账本）、`news.json`（官推动态）、`watch-accounts.json`（跟踪的官推）、`radar-*.json(l)`（雷达状态）。看板 `npm run dashboard` 只读这些文件。
+`data/` 下：`projects.json`（台账）、`watch.json`（持仓：`collections` 是 NFT 系列，`tokens` 是花钱换到的代币——**用户让你买币 / 参与发射后，把代币加进 `tokens` 并写上成本**）、`realized.json`（已实现盈亏——**每次卖出后追加一条 `{ ts, project, name, cost, proceeds, tx }`**）、`events.jsonl`（日志）、`spend.jsonl`（花费账本）、`news.json`（官推动态）、`watch-accounts.json`（跟踪的官推）、`radar-*.json(l)`（雷达状态）、`claims.json`（到点自动领取的登记——**用户让你登记一个到点领取时写这里，格式见 docs/auto.md，`to` / `data` 必须是核实过的官方合约和调用**）、`market-watch.json`（Element 监控）、`take-profit-state.json` / `redeem-state.json`（自动任务的状态，不要手改）。看板 `npm run dashboard` 只读这些文件。
+
+自动任务（`config.auto`）会发交易，默认全关，**不要替用户打开**（`config/config.json` 你不能改）。用户想让某个代币不被自动止盈卖掉，在 `watch.json` 的代币条目里加 `"hold": true`；只想卖一次就加 `"sellOnce": 0.5`。
 
 多钱包（可选，`data/wallets.json`，见 README「多钱包」）：副钱包的持仓在 `data/wallets/<id>/watch.json`（`mint.mjs --wallet` 自动维护；给副钱包记代币时写这里）；`realized.json` 的卖出记录如果是副钱包的，加上 `"wallet": "<id>"`。用户没有明确说用哪个 / 哪些钱包时只用主钱包；副钱包默认只打免费，不要为了付费去改 `wallets.json` 的 `allowPaid`。**不要读取、打印或复制副钱包会话目录里的任何文件**（`~/.config/binance-ai-wallet-tools/wallets/`），也不要自己设置 `BINANCE_BAW_DIR` / `NODE_OPTIONS` 去跑 baw。
 

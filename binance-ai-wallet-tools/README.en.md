@@ -94,10 +94,11 @@ src/cli/                                 mint (guarded minting), mint-all (mint 
 src/lib/rules.mjs                        spending rules and preview checks (unit tests in test/, npm test)
 src/server/                              local read-only dashboard
 src/telegram/                            Telegram bot (alerts + read-only queries)
+src/auto/                                optional background jobs: Element market watch (read-only); auto-claim / auto-redeem / auto take-profit (send transactions, off by default, see docs/auto.md)
 src/lib/wallets.mjs                      multiple wallets (data/wallets.json, optional; see "Multiple wallets" in the top-level README)
 scripts/                                 setup, service (background), check (pre-publish privacy scan), wallet (manage wallets)
 data/  logs/                             your ledger and logs (not committed)
-docs/                                    data sources, markets, agents, Telegram (zh / en), security model
+docs/                                    data sources, markets, agents, Telegram (zh / en), auto jobs, security model
 ```
 
 ## FAQ

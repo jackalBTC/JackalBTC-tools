@@ -28,6 +28,17 @@
 - **软约束（靠 Claude 遵守规则）**：「有官网或官推」这一条读的是台账里的 `site` / `x`，台账由 Claude 填写。skill 要求只填核实过的官方来源，但这不是代码能证明的。所以真正兜底的是上面的金额上限——请按你能接受的损失来设置。
 - 项目自带的 `.claude/settings.json` 禁止 Claude 编辑 `config/config.json` 和读取密钥目录；Claude 仍有命令行权限，所以这同样是「防误操作」而不是「防恶意」。
 
+## 后台自动任务（v0.4.0，可选）
+`npm run service install` 会在打开了 `marketWatch` 或 `auto` 任何一项时多托管一个 `auto`（`src/auto/auto.mjs`）。详见 [auto.md](auto.md)。
+- **Element 市场监控**（默认开）：只读链，不授权、不挂单、不发交易。
+- **会发交易的三项默认全关**，要在 `config/config.json` 里明确写 `"enabled": true`：
+  - `auto.claims` 到点自动领取：预演必须**零扣款**（连 BNB 都不行）、零授权 / 权限变化、零风险提示、不要求 App 确认，并且收到登记的代币；
+  - `auto.redeem` 卡换代币：只照抄**零付费**的样板，只用本钱包自己的卡，预演只能少了这几张卡、必须收到代币；**不做授权、付费兑换、钱包间归集**；
+  - `auto.takeProfit` 自动止盈：只卖 `watch.json` 里登记的代币，只换回 BNB，从不买入；币安要求 App 确认的（30003001）只通知你。
+- 三项都和 mint 共用 `data/.mint.lock`、每步写操作日志，执行前核对钱包会话。
+- **不签 Permit / Permit2，不用 setApprovalForAll，不 approve，不转账**——这些在 `src/auto/` 里根本没有代码路径。
+- 代码保证不了的：领取登记里的合约是不是官方的（登记的人要核实）、换到 / 领到的代币值不值钱、DEX 价格是否被操纵、卖出滑点。
+
 ## Telegram 机器人（可选）
 - **只读**：机器人没有任何会花钱、发交易、改配置的命令。即使机器人 token 或你的 Telegram 账号泄露，别人也动不了钱包。
 - **只认绑定的聊天**：`telegram.chatIds` 以外的人给机器人发消息，它完全不回应。

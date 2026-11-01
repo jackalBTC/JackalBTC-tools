@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// 本地只读看板。只监听本机（默认 127.0.0.1:8790），只处理 GET；不签名、不发交易、不读写钱包凭证。
+// 本地只读看板。持仓卡片按 src/lib/tiers.mjs 分组（能卖 / 有市场没买家 / 新打的 / 沉寂 / 已清仓 / 已核销）。
+// 只监听本机（默认 127.0.0.1:8790），只处理 GET；不签名、不发交易、不读写钱包凭证。
 // 多钱包（data/wallets.json）：余额 / 持仓 / NFT / 盈亏 / 复盘接口带 ?w=<钱包 id> 看单个钱包，?w=all 看全部合计，不带 = 主钱包。
 // 用法: node src/server/server.mjs
 import http from 'node:http';
@@ -10,7 +11,9 @@ import dns from 'node:dns/promises';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { config, readJson, writeJson, tailLines, ROOT } from '../lib/config.mjs';
-import { batch, sel, word, big, addrOf, decodeStr, rpc, baw } from '../lib/chain.mjs';
+import { batch, sel, word, big, addrOf, decodeStr, rpc, baw, dexQuote } from '../lib/chain.mjs';
+import { tierOf, realizedOf } from '../lib/tiers.mjs';
+import { elementSummary } from '../lib/element.mjs';
 import { readEvents } from '../lib/events.mjs';
 import { listWallets, envFor, readWatch } from '../lib/wallets.mjs';
 import { ADAPTERS } from './markets/index.mjs';
@@ -122,37 +125,58 @@ async function supplyOf(c) {
     return { minted: await tryNum(['totalSupply()', 'totalMinted()']), max: c.maxSupply || await tryNum(['MAX_SUPPLY()', 'maxSupply()', 'MAX_MINTABLE()', 'MAX_TOKENS()', 'collectionSize()']) };
   }).catch(() => ({ minted: null, max: null }));
 }
+// 每个项目第一次铸造成功的时间（操作日志）、最近一条项目动态的时间（news.json）：看板据此分「新打的 / 沉寂」
+function activity() {
+  const first = {}, news = {};
+  for (const e of readEvents(1e6)) if (e.action === 'confirm' && /status=0x1/.test(e.detail || '')) { const t = Date.parse(e.ts); if (!(first[e.project] <= t)) first[e.project] = t; }
+  for (const x of readJson('news.json', [])) { const t = Date.parse(x?.ts), k = String(x?.project || ''); if (t && !(news[k] >= t)) news[k] = t; }
+  return { first, news };
+}
 async function positions(w) {
-  const wl = readWatch(w), cols = wl.collections || [], W = w.address;
+  const wl = readWatch(w), cols = wl.collections || [], W = w.address, now = Date.now();
   const bals = await batch(cols.map(c => [c.contract, '0x' + sel('balanceOf(address)') + word(W)]));
   const owned = Object.fromEntries((snaps.get(skey('nfts', w))?.v || await nfts(w)).collections.map(c => [c.id, c.items.filter(i => i.owned)]));
+  const mainId = (await listWallets()).find(x => x.main)?.id || 'main';
+  const RZ = readJson('realized.json', []), act = activity();
+  const rz = pid => realizedOf(RZ, pid, w.id, mainId);   // 已实现盈亏：清仓的卡片显示累计成本 / 累计收回
+  const MW = readJson('market-watch.json', {});   // 后台任务 auto 扫的 Element 链上成交 / 求购
   const list = [];
   for (const [i, c] of cols.entries()) {
-    const mk = await marketOf(c), items = owned[c.id] || [], heldByRarity = {};
+    let mk = await marketOf(c);
+    const items = owned[c.id] || [], heldByRarity = {};
     for (const it of items) if (it.rarity) heldByRarity[it.rarity] = (heldByRarity[it.rarity] || 0) + 1;
+    const el = elementSummary((MW.el || {})[String(c.contract).toLowerCase()], MW.used, c.ids || [], now);
     let value = null;
     if (mk.floor != null) {
       if (mk.byRarity && items.length && items.every(it => it.rarity)) value = items.reduce((s, it) => s + (mk.byRarity[it.rarity]?.floor ?? mk.floor), 0);
       else value = mk.floor * Number(big(bals[i]));
+    } else if (el?.bids) {   // 没有地板价，但有人在 Element 求购我们手上的编号：按每个编号的最高求购价估值（不能拿最高价乘张数）
+      const ps = Object.values(el.best);
+      mk = { ...mk, bid: Math.max(...ps), currency: 'BNB', note: '只算收我们编号的 Element 求购' };
+      value = ps.reduce((a, b) => a + b, 0);
     }
-    list.push({ id: c.id, name: c.name, contract: c.contract, held: Number(big(bals[i])), url: c.market?.url || null,
+    const p = { id: c.id, name: c.name, contract: c.contract, held: Number(big(bals[i])), url: c.market?.url || null,
       currency: c.market?.currency || null, marketType: c.market?.type || 'none', cost: c.cost || null,
-      ...mk, heldByRarity, value, supply: await supplyOf(c) });
+      ...mk, heldByRarity, value, supply: await supplyOf(c), el: el ? { fills: el.fills, last: el.last, bids: el.bids } : null,
+      realized: rz(c.realizedProject || c.id), writtenOff: c.writtenOff || null, firstMint: act.first[c.id] || null, lastNews: act.news[c.id] || null };
+    p.tier = tierOf(p, now);
+    list.push(p);
   }
   // 打到的代币（watch.json 的 tokens）：链上读余额，DexScreener 有交易池就算开盘（取流动性最大的池子报价）
   for (const t of wl.tokens || []) {
     const [b, d] = await batch([[t.contract, '0x' + sel('balanceOf(address)') + word(W)], [t.contract, '0x' + sel('decimals()')]]);
     const held = Number(big(b)) / 10 ** (Number(big(d)) || 18);
-    const mk = await cached('dex:' + t.contract, 600e3, async () => {
-      const j = await (await fetch('https://api.dexscreener.com/latest/dex/tokens/' + t.contract, { signal: AbortSignal.timeout(20000) })).json();
-      const p = (j.pairs || []).filter(x => x.chainId === 'bsc' && +x.priceUsd > 0).sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
-      return p ? { floor: +p.priceUsd, liquidity: p.liquidity?.usd ?? null, url: /^https:\/\/dexscreener\.com\//.test(p.url) ? p.url : null } : {};
-    }).catch(() => ({}));
-    list.push({ id: t.id, name: t.name, symbol: t.symbol, contract: t.contract, kind: 'token', held, cost: t.cost || null,
-      marketType: mk.floor != null ? 'dex' : 'none', currency: 'USD', floor: mk.floor ?? null, liquidity: mk.liquidity ?? null,
-      url: mk.url || null, value: mk.floor != null ? mk.floor * held : null, note: mk.floor != null ? null : '还没开盘（没有交易池）' });
+    const mk = await cached('dex:' + t.contract, 600e3, async () => await dexQuote(t.contract) || {}).catch(() => ({}));
+    const sold = rz(t.id);   // 止盈卖掉的部分
+    const p = { id: t.id, name: t.name, symbol: t.symbol, contract: t.contract, kind: 'token', held, cost: t.cost || null,
+      marketType: mk.price != null ? 'dex' : 'none', currency: 'USD', floor: mk.price ?? null, liquidity: mk.liquidity ?? null,
+      url: mk.url || null, value: mk.price != null ? mk.price * held : null, note: mk.price != null ? null : '还没开盘（没有交易池）',
+      realized: sold, ...(sold ? { soldQty: sold.qty || undefined, soldCost: sold.cost, soldProceeds: sold.proceeds } : {}),
+      writtenOff: t.writtenOff || null, firstMint: act.first[t.id] || null, lastNews: act.news[t.id] || null };
+    p.tier = tierOf(p, now);
+    list.push(p);
   }
-  return { positions: list, at: Date.now() };
+  return { positions: list, at: now };
 }
 
 // ---------- 复盘：开没开市场、地板价、链上整包授权（疑似开了市场） ----------
@@ -241,7 +265,9 @@ http.createServer(async (req, res) => {
         case '/api/positions': {
           if (!ALL) return json(await snapshot(skey('pos', w), () => positions(w), 5 * 60e3));
           const rs = await each(x => snapshot(skey('pos', x), () => positions(x), 5 * 60e3), { positions: [] });
-          return json({ positions: mergePositions(rs.map(r => r.v.positions)), warnings: warn(rs), at: Date.now() });
+          const now = Date.now(), merged = mergePositions(rs.map(r => r.v.positions));
+          for (const p of merged) p.tier = tierOf(p, now);   // 合计后重新分组（比如一个钱包清仓了、另一个还拿着）
+          return json({ positions: merged, warnings: warn(rs), at: now });
         }
         case '/api/outcomes': {
           if (!ALL) return json(await snapshot(skey('out', w), () => outcomes(w), 30 * 60e3));

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // 让雷达和看板在后台一直跑（崩了自动重启，开机登录后自动启动）。
+// 可选：配置了 Telegram 机器人 token 才托管机器人；打开了 marketWatch 或 auto 里任何一项才托管后台自动任务（src/auto/auto.mjs）。
 //   node scripts/service.mjs install     安装并启动
 //   node scripts/service.mjs uninstall   停止并移除
 //   node scripts/service.mjs status      查看状态
@@ -21,6 +22,12 @@ const JOBS = [
 // 配置了 Telegram 机器人 token 才托管机器人
 const hasTelegram = !!process.env.TELEGRAM_BOT_TOKEN || (() => { try { return !!JSON.parse(fs.readFileSync(path.join(os.homedir(), '.config/binance-ai-wallet-tools/secrets.json'), 'utf8')).telegram; } catch { return false; } })();
 if (hasTelegram || cmd === 'uninstall') JOBS.push({ name: 'telegram', script: 'src/telegram/bot.mjs', log: 'telegram.log' });
+// 后台自动任务：用户配置优先，没写的按模板默认值（marketWatch 默认开、只读；会发交易的 auto.* 默认关）
+const cfgOf = f => { try { return JSON.parse(fs.readFileSync(path.join(ROOT, 'config', f), 'utf8')); } catch { return {}; } };
+const ex = cfgOf('config.example.json'), user = cfgOf('config.json');
+const flag = (a, b) => (a ?? b) === true;
+const hasAuto = flag(user.marketWatch?.enabled, ex.marketWatch?.enabled) || ['claims', 'redeem', 'takeProfit'].some(k => flag(user.auto?.[k]?.enabled, ex.auto?.[k]?.enabled));
+if (hasAuto || cmd === 'uninstall') JOBS.push({ name: 'auto', script: 'src/auto/auto.mjs', log: 'auto.log' });
 const xml = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const run = (c, a) => { try { execFileSync(c, a, { stdio: 'pipe' }); return { ok: true }; } catch (e) { return { ok: false, msg: (String(e.stderr || '') + String(e.stdout || '')).trim() || e.message }; } };
 const sh = (c, a) => { try { return execFileSync(c, a, { stdio: 'pipe' }).toString(); } catch (e) { return String(e.stdout || '') + String(e.stderr || ''); } };

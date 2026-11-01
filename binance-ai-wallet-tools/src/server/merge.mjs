@@ -1,4 +1,5 @@
 // 看板「全部钱包」合计：把每个钱包的结果按合约合并。纯函数，test/ 里有单元测试。
+// 已实现盈亏（realized）和已卖出部分按币种相加；Element 成交笔数是同一个系列的，只取一份。
 // 成本是 { 币种: 数量 }（例如 { BNB: 0.01, USDT: 3 }），按币种相加；市值有一个是 null 就用另一个。
 export function addCost(a, b) {
   if (!a) return b ? { ...b } : null;
@@ -17,6 +18,13 @@ export function mergePositions(lists) {
     if (!o) { by.set(k, { ...p, cost: addCost(null, p.cost), heldByRarity: { ...(p.heldByRarity || {}) } }); continue; }
     o.held = (o.held || 0) + (p.held || 0); o.cost = addCost(o.cost, p.cost); o.value = addNum(o.value, p.value);
     for (const [r, n] of Object.entries(p.heldByRarity || {})) o.heldByRarity[r] = (o.heldByRarity[r] || 0) + n;
+    if (p.realized) o.realized = o.realized ? { n: o.realized.n + p.realized.n, cost: addCost(o.realized.cost, p.realized.cost), proceeds: addCost(o.realized.proceeds, p.realized.proceeds), qty: (o.realized.qty || 0) + (p.realized.qty || 0) } : { ...p.realized };
+    if (p.soldQty != null) { o.soldQty = (o.soldQty || 0) + p.soldQty; o.soldCost = addCost(o.soldCost, p.soldCost); o.soldProceeds = addCost(o.soldProceeds, p.soldProceeds); }
+    if (p.el && !o.el) o.el = p.el; else if (p.el) o.el = { ...o.el, bids: (o.el.bids || 0) + (p.el.bids || 0) };   // 成交是同一个系列的，不重复加；求购按钱包各自的编号算
+    if (p.bid != null && (o.bid == null || p.bid > o.bid)) o.bid = p.bid;
+    if (p.firstMint && (!o.firstMint || p.firstMint < o.firstMint)) o.firstMint = p.firstMint;
+    if (p.lastNews && (!o.lastNews || p.lastNews > o.lastNews)) o.lastNews = p.lastNews;
+    o.writtenOff ||= p.writtenOff || null;
   }
   return [...by.values()];
 }

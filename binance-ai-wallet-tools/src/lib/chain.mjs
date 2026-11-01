@@ -131,3 +131,36 @@ export async function walletAddress() {
   if (!a) throw new Error('读不到钱包地址：' + (r?.error?.message || '请先 baw 登录'));
   return (_wallet = a.address);
 }
+
+// ---------- 分段 eth_getLogs ----------
+// 一次查的区块数不超过 maxRange（config.rpc.logsMaxRange；有的 RPC 只允许 5000 块）。
+// RPC 嫌范围太大 / 结果太多时自动减半再试；其他错误直接抛出（调用方整轮作废，下轮从原位置重来，不会漏）。
+// call 可替换（测试用）：call(filter) → logs
+export async function getLogs(filter, from, to, { maxRange = config.rpc.logsMaxRange, url = config.rpc.logs, call } = {}) {
+  const q = call || (f => rpc('eth_getLogs', [f], url));
+  const hex = n => '0x' + n.toString(16), out = [];
+  let size = Math.max(1, Math.floor(maxRange));
+  for (let b = from; b <= to;) {
+    const e = Math.min(b + size - 1, to);
+    try { out.push(...(await q({ ...filter, fromBlock: hex(b), toBlock: hex(e) }) || [])); b = e + 1; }
+    catch (err) {
+      if (size > 50 && /range|limit|too many|too large|exceed|more than|max|block/i.test(String(err?.message || err))) { size = Math.floor(size / 2); continue; }
+      throw err;
+    }
+  }
+  return out;
+}
+
+// ---------- 代币 ----------
+export async function tokenBalance(token, owner) {
+  const [b, d] = await batch([[token, '0x' + sel('balanceOf(address)') + word(owner)], [token, '0x' + sel('decimals()')]]);
+  return { raw: big(b), decimals: Number(big(d)) || 18 };
+}
+// 最小单位 → 十进制字符串（不丢精度），例如 (1500000000000000000n, 18) → "1.5"
+export const fmtUnits = (raw, dec) => { const s = BigInt(raw).toString().padStart(dec + 1, '0'); const i = s.slice(0, s.length - dec) || '0', f = dec ? s.slice(-dec).replace(/0+$/, '') : ''; return f ? `${i}.${f}` : i; };
+// DexScreener：BSC 上流动性最大的池子。没有池子返回 null
+export async function dexQuote(token) {
+  const j = await (await fetch('https://api.dexscreener.com/latest/dex/tokens/' + token, { signal: AbortSignal.timeout(20000) })).json();
+  const p = (j.pairs || []).filter(x => x.chainId === 'bsc' && +x.priceUsd > 0).sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+  return p ? { price: +p.priceUsd, liquidity: p.liquidity?.usd ?? null, url: /^https:\/\/dexscreener\.com\//.test(p.url) ? p.url : null, pair: isAddr(p.pairAddress) ? p.pairAddress : null } : null;
+}

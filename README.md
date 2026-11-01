@@ -1,6 +1,6 @@
 # 币安 AI 钱包工具（binance-ai-wallet-tools）
 
-[English](README.en.md) · JackalBTC 的工具库 · 当前版本 **v0.3.3** · [更新日志](CHANGELOG.md)
+[English](README.en.md) · JackalBTC 的工具库 · 当前版本 **v0.4.0** · [更新日志](CHANGELOG.md)
 
 > ⚠️ 和链上资产有关，**不构成投资建议**。默认只打免费的；使用前请先读[使用前请先知道](#使用前请先知道)和[安全设计](#安全设计)。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 日期 | 更新了什么 |
 |---|---|---|
+| **v0.4.0 市场监控与自动任务** | 2026-11-01 | 看板持仓按「能卖 / 有市场没买家 / 新打的 / 沉寂 / 已清仓」分组，清仓的显示累计成本、收回和净盈亏；Element 链上成交 / 求购监控（只读）；可选的到点自动领取、卡换代币、自动止盈（会发交易，默认关）；雷达可选 Flap Agent 新盘提醒 |
 | **v0.3.3 只推要花钱的** | 2026-10-31 | TG 免费铸造成功不再逐笔推（看每晚总结），新增「付费项目简报」响铃提醒；`/holdings` `/pnl` 查持仓和战绩 |
 | **v0.3.2 小修** | 2026-10-30 | 钱包下拉框自动刷新，改钱包名、加钱包不用手动刷新页面 |
 | **v0.3.1 打新统计** | 2026-10-30 | 看板「今天打了」旁边加上昨天打了多少、运行以来累计打了多少个项目和多少笔 |
@@ -34,6 +35,7 @@
   - [9. 无人值守模式 agent](#9-无人值守模式-agent)
   - [10. 安装向导、自检、后台托管、隐私检查](#10-安装向导自检后台托管隐私检查)
   - [11. 多钱包](#11-多钱包)
+  - [12. 后台自动任务 auto](#12-后台自动任务-auto)
 - [安全设计](#安全设计)
 - [安装与上手](#安装与上手)
 - [配置说明](#配置说明)
@@ -188,7 +190,7 @@
 | 页面 | 内容 |
 |---|---|
 | **总览** | 资产估值（代币 + NFT 按稀有度地板价）、今天铸造了几笔、待你确认的项目卡（可折叠、可暂时关闭，雷达再扫到会重新出现）、重要项目动态、Gas 余额与提醒线、收藏系列（分页）、盈亏台账（已实现 + 持仓浮动，同一项目多笔卖出合并成一行；已花钱但还没报价的单列「等开盘」） |
-| **持仓与市场** | 每个 NFT 系列的持有数、成本、地板价、按稀有度的估值与盈亏、铸造进度；打到的代币也在这里（链上读余额，DexScreener 一出现交易池就显示现价和盈亏，之前显示「未开盘」）；分「市场已开放 / 未开放 / 全部」。持仓清单一改动就立刻重算，页面每分钟自动刷新 |
+| **持仓与市场** | 每个 NFT 系列的持有数、成本、地板价、按稀有度的估值与盈亏、铸造进度；打到的代币也在这里（链上读余额，DexScreener 一出现交易池就显示现价和盈亏，之前显示「未开盘」；止盈卖掉的部分显示「已卖出 / 剩余成本」）。分组：**能卖**（有真实报价）/ **有市场没买家**（Element 有成交但没人收我们的编号，或市场开了没挂单）/ **新打的** / **沉寂** / **已清仓**（只显示累计成本、累计收回、净盈亏，没卖出记录就写「没有卖出记录」）/ **已核销**。持仓清单一改动就立刻重算，页面每分钟自动刷新 |
 | **推特雷达** | 运行状态、花费、最近线索（标出已打 / 待确认 / 未处理）、雷达日志 |
 | **官推动态** | 已参与项目的中文动态总结，按「重要 / 机会 / 注意 / 一般」分级，重要的可标为已读 |
 | **收藏** | 持有的 NFT 图片、编号、稀有度、属性 |
@@ -209,6 +211,8 @@
   - 已参与项目的重要动态
   - 付费铸造成功（带交易链接和花费）；免费的默认不逐笔推，看每晚 21:00 的总结（`freeMints: true` 可打开）
   - 付费项目简报（雷达日志里的 `PAID` 行，响铃）
+  - Flap Agent 新盘（雷达日志里的 `FLAP` 行，响铃；要先打开 `radar.flap.enabled`）
+  - 后台自动任务的结果：Element 有真实成交 / 求购、自动领取 / 兑换 / 止盈成交、需要你在 App 里确认的卖出（都是「重要」级项目动态）
   - 等你决定、被安全检查中止
   - BNB 不足、钱包掉线、开发者模式到期、雷达出错
   - 新线索 / 多人在传（默认关，量大）
@@ -234,9 +238,9 @@
 |---|---|
 | `npm run setup` | 安装向导：装依赖、装币安 CLI 和官方 skill（会先问你）、选推特数据源并保存 Key、设花钱规则、可选绑定 Telegram |
 | `npm run doctor` | 自检：Node、依赖、baw、钱包登录、开发者模式、BNB、配置、推特 Key、Telegram |
-| `npm run service install / status / uninstall` | 后台托管雷达、看板、Telegram 机器人，崩了自动重启（macOS 用 launchd；其他系统给出 pm2 命令） |
+| `npm run service install / status / uninstall` | 后台托管雷达、看板、Telegram 机器人、后台自动任务（打开了才托管），崩了自动重启（macOS 用 launchd；其他系统给出 pm2 命令） |
 | `npm run check` | 发布前隐私检查：扫出钱包地址、交易哈希、本机路径、邮箱、疑似密钥和助记词 |
-| `npm test` | 39 个单元测试：花钱规则、预演检查、报价识别、Telegram 消息格式、多钱包 |
+| `npm test` | 68 个单元测试：花钱规则、预演检查、报价识别、Telegram 消息格式、多钱包、止盈阶段、Element 日志解析、看板分组、自动领取 / 兑换的检查 |
 
 另外：仓库里的 GitHub Actions 会在每次提交时，自动跑语法检查、单元测试和隐私检查。
 
@@ -268,6 +272,20 @@
 
 看板顶部会出现钱包切换（2 个以上才显示）：单个钱包或「全部钱包」合计（同一个合约的张数、市值、成本相加）。副钱包的持仓清单在 `data/wallets/<id>/watch.json`。雷达每轮也会检查副钱包（掉线、开发者模式、BNB 不足，同一问题 2 小时内只报一次，消息开头带 `[钱包id]`）。Telegram 的 `/status` 每个钱包一段，`/today` 按钱包分组。
 
+### 12. 后台自动任务 auto
+`src/auto/` · `npm run auto`（`npm run auto:dry` 试运行一轮）· 后台托管：`npm run service install`（打开了任何一项才托管，日志 `logs/auto.log`）
+
+| 任务 | 开关 | 默认 | 做什么 |
+|---|---|---|---|
+| **Element 市场监控** | `marketWatch.enabled` | 开（只读） | 每 30 分钟读 Element 交易所的链上成交、求购、撤单。近 3 天 ≥3 笔成交且最近一笔 ≥$2，或有人出价 ≥$5 求购**我们手上的编号**，就提醒一次。看板据此分「能卖 / 有市场没买家」 |
+| **到点自动领取** | `auto.claims.enabled` | **关** | `data/claims.json` 里登记的领取，时间到了先模拟、再预演；预演必须零扣款、零授权、零风险提示、不要求 App 确认、收到登记的代币才执行。领到的代币加进持仓 |
+| **卡换代币** | `auto.redeem.enabled` | **关** | 链上看到别人烧卡换到代币，照抄同样的调用给你的卡换；只做零授权、零付费、用本钱包自己的卡；预演只能少了这几张卡、必须收到代币 |
+| **自动止盈** | `auto.takeProfit.enabled` | **关** | 持仓里写了成本的代币：3 倍卖回本钱，10 / 30 / 50 / 100 / 150 / 200 倍各卖剩余 20%，到过 10 倍又跌回 3 倍卖一半。单个代币可设 `hold`（不卖）、`sellOnce`（只卖一次）、`firstTp`、`ladder`、`back3`。只换回 BNB，从不买入；币安要求 App 确认的只通知你 |
+
+- 会发交易的三项**默认全关**，开关必须写 `true` / `false`（不加引号，写错直接报错退出）。打开前读 [docs/auto.md](binance-ai-wallet-tools/docs/auto.md)：每项的规则、登记格式和风险。
+- 都走 `baw contract-call preview` → `execute`（止盈走 `baw market-order swap`），和 mint 共用锁、每步写日志、执行前核对钱包会话。**不签 Permit / Permit2，不用 setApprovalForAll，不授权、不转账。**
+- 改了配置要重新运行 `npm run service install` 才生效。
+
 ## 安全设计
 
 | 风险 | 怎么防 |
@@ -275,6 +293,7 @@
 | 推文 / 网页里藏着让 AI 执行的指令（投毒） | 外部内容只当数据；不运行外部脚本、不安装、不下载；遇到就中止并记录 |
 | 合约偷偷扣钱、要授权 | 每笔交易先走币安官方预演，有额外扣款、授权、风险提示就不执行（写死在代码里） |
 | AI 一直花钱 | 默认只打免费；付费要你自己开，并受单价、每项目累计、每天三道上限约束；同一时间只跑一个 |
+| 后台自动卖币 / 领取 / 兑换出错 | 默认全关；打开后每笔都先模拟、再预演，有扣款、授权、风险提示就不执行；止盈只卖登记的代币、只换回 BNB |
 | 配置写错 | 类型或格式不对直接报错退出，不会悄悄按别的值运行 |
 | 私钥 / 密钥泄露 | 私钥在币安托管，工具拿不到；推特、xAI、Telegram 的 Key 只存在本机 `~/.config/binance-ai-wallet-tools/secrets.json`（600），不进仓库、不进日志、不传给 AI 进程 |
 | 看板被别的网页读取或攻击 | 只监听本机、只接受 GET、校验 Host 头、转义所有外部内容、拒绝内网元数据地址 |
@@ -337,6 +356,14 @@ claude                     # 在本目录打开 Claude Code（或 codex）
 | | `freeMints` | `false` | 免费铸造成功是否逐笔推送 |
 | `agent` | `enabled` / `command` | 关 | 无人值守模式，见 [docs/agents.md](binance-ai-wallet-tools/docs/agents.md) |
 | `dashboard` | `host` / `port` | `127.0.0.1` / `8790` | 看板地址（只允许本机） |
+| `rpc` | `logsMaxRange` | `49000` | `eth_getLogs` 一次最多查多少块；换 RPC 要按它的限制改（有的只允许 5000），太大时会自动减半重试 |
+| `radar` | `flap.enabled` | `false` | 每轮顺便读 Flap Agent 新盘（只读链），推送并响铃 |
+| `marketWatch` | `enabled` | `true` | Element 市场监控（只读），由后台任务 auto 运行 |
+| | `everyMinutes` / `firstBlocks` | `30` / `900000` | 多久扫一次 / 最多往回扫多少块 |
+| | `minFills` / `minFillUsd` / `minBidUsd` | `3` / `2` / `5` | 提醒规则：近 3 天成交笔数和最近一笔价格，或收我们编号的求购价 |
+| `auto` | `claims.enabled` | `false` | 到点自动领取 `data/claims.json` 里登记的代币（会发交易） |
+| | `redeem.enabled` / `everyMinutes` / `firstBlocks` | `false` / `10` / `20000` | 卡换代币（会发交易） |
+| | `takeProfit.enabled` / `everyMinutes` / `slippage` | `false` / `2` / `10` | 自动止盈（会卖币），滑点百分比 |
 
 ## 数据文件
 都在 `data/`，属于你自己，不进 git：
@@ -345,7 +372,7 @@ claude                     # 在本目录打开 Claude Code（或 codex）
 |---|---|
 | `projects.json` | 项目台账：评级、状态、官网官推、合约、项目卡、后续结果 |
 | `wallets.json` | 多钱包列表（可选，见[多钱包](#11-多钱包)）；副钱包的持仓在 `wallets/<id>/watch.json` |
-| `watch.json` | 持仓：`collections`（NFT 系列：合约、持有编号、成本、市场配置，mint 会自动维护）和 `tokens`（代币：`{ id, name, symbol, contract, cost: { BNB 或 USDT } }`，花钱换到的币由 AI 加进来） |
+| `watch.json` | 持仓：`collections`（NFT 系列：合约、持有编号、成本、市场配置，mint 会自动维护）和 `tokens`（代币：`{ id, name, symbol, contract, cost: { BNB 或 USDT } }`，花钱换到的币由 AI 加进来；可选的止盈字段 `hold`、`sellOnce`、`firstTp`、`ladder`、`back3`；系列或代币可标 `writtenOff: { label, note }` 表示已核销） |
 | `realized.json` | 已实现盈亏：每次卖出记一条 `{ ts, project, name, cost: {…}, proceeds: {…}, tx? }`，看板的盈亏台账按它算；副钱包的记录加 `wallet` |
 | `events.jsonl` | 每一步操作日志（只追加） |
 | `spend.jsonl` | 花费账本（每日 / 每项目上限按它算；多钱包时每条带 `wallet`） |
@@ -353,6 +380,10 @@ claude                     # 在本目录打开 Claude Code（或 codex）
 | `watch-accounts.json` | 跟踪的官推 |
 | `fingerprints.json` | 合约接口指纹（识别批量模板） |
 | `radar-*.json(l)` | 雷达状态与线索 |
+| `claims.json` | 到点自动领取的登记（可选，格式见 [docs/auto.md](binance-ai-wallet-tools/docs/auto.md)） |
+| `market-watch.json` | Element 市场监控的扫描进度和最近 7 天的成交 / 求购 |
+| `take-profit-state.json` / `redeem-state.json` | 自动止盈各阶段做没做过、挂起的卖单；兑换样板和进度 |
+| `flap-state.json` | Flap 新盘扫到第几个 |
 
 ## 常见问题
 

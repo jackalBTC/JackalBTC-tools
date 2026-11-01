@@ -1,6 +1,6 @@
 # Binance AI Wallet Tools (binance-ai-wallet-tools)
 
-[中文](README.md) · JackalBTC Tools · current version **v0.3.3** · [Changelog](CHANGELOG.en.md)
+[中文](README.md) · JackalBTC Tools · current version **v0.4.0** · [Changelog](CHANGELOG.en.md)
 
 > ⚠️ Deals with on-chain assets – **not financial advice**. Free mints only by default; read [Before you start](#before-you-start) and [Security design](#security-design) first.
 
@@ -8,6 +8,7 @@
 
 | Version | Date | Changes |
 |---|---|---|
+| **v0.4.0 Market watch and auto jobs** | 2026-11-01 | Dashboard holdings grouped as "can sell / market but no buyers / new / quiet / exited", exited cards show total cost, total returned and net P&L; Element on-chain fills / bids watch (read-only); optional scheduled auto-claim, card-to-token auto-redeem and auto take-profit (send transactions, off by default); optional Flap Agent new-market alerts in the radar |
 | **v0.3.3 Only what costs money** | 2026-10-31 | Telegram no longer pushes each free mint (see the nightly summary); new ringing "paid project brief" alert; `/holdings` `/pnl` |
 | **v0.3.2 Small fix** | 2026-10-30 | Wallet drop-down refreshes on its own after renaming or adding a wallet |
 | **v0.3.1 Mint stats** | 2026-10-30 | The "minted today" card also shows yesterday and the running total of projects and transactions |
@@ -34,6 +35,7 @@ Full notes: [Changelog](CHANGELOG.en.md) and [Releases](https://github.com/jacka
   - [9. Unattended mode – agent](#9-unattended-mode--agent)
   - [10. Setup wizard, self-check, background service, privacy check](#10-setup-wizard-self-check-background-service-privacy-check)
   - [11. Multiple wallets](#11-multiple-wallets)
+  - [12. Background jobs (auto)](#12-background-jobs-auto)
 - [Security design](#security-design)
 - [Install and get started](#install-and-get-started)
 - [Configuration](#configuration)
@@ -189,7 +191,7 @@ Runs on your machine only and is read-only: no signing, no transactions, no stor
 | Page | Contents |
 |---|---|
 | **Overview** | Asset value (tokens + NFTs at rarity-aware floor), mints today, project cards waiting for you (collapsible, can be dismissed until the radar sees them again), important project updates, gas balance and alert line, collections (paged), P&L card (realized + unrealized; several sales of one project merged into one row; money spent on things without a price yet shown separately as "awaiting market") |
-| **Holdings & market** | Per NFT collection: units held, cost, floor price, rarity-aware value and P&L, mint progress. Tokens you bought are listed too (balance read on-chain; once DexScreener sees a pool they show price and P&L, before that "not launched"). Tabs "market open / not open / all". Recomputed as soon as the holdings file changes; the page refreshes every minute |
+| **Holdings & market** | Per NFT collection: units held, cost, floor price, rarity-aware value and P&L, mint progress. Tokens you bought are listed too (balance read on-chain; once DexScreener sees a pool they show price and P&L, before that "not launched"). Tokens partly sold by take-profit show "sold / remaining cost". Groups: **can sell** (a real price exists) / **market but no buyers** (Element fills but nobody bids on our token ids, or a market with no listings) / **new** / **quiet** / **exited** (only total cost, total returned and net P&L; "no sale records" if none) / **written off**. Recomputed as soon as the holdings file changes; the page refreshes every minute |
 | **X radar** | Running status, spend, recent leads (marked minted / waiting / unhandled), radar log |
 | **Project updates** | Chinese summaries for joined projects, rated important / opportunity / caution / general; important ones can be marked read |
 | **Collection** | Your NFTs with image, id, rarity and traits |
@@ -210,6 +212,8 @@ Technical notes:
   - important updates from joined projects
   - successful paid mints (with transaction link and cost); free mints are not pushed one by one by default – see the 21:00 nightly summary (`freeMints: true` turns them on)
   - paid project briefs (`PAID` lines in the radar log, with sound)
+  - Flap Agent new markets (`FLAP` lines in the radar log, with sound; enable `radar.flap.enabled` first)
+  - results of the background jobs: real Element fills / bids, auto-claims, redeems and take-profit fills, sells that need your confirmation in the App (all as "important" project updates)
   - waiting for your decision, stopped by a safety check
   - low BNB, wallet signed out, Developer Mode expiring, radar errors
   - new leads / HOT (off by default – high volume)
@@ -235,9 +239,9 @@ Technical notes:
 |---|---|
 | `npm run setup` | Wizard: dependencies, Binance CLI and official skills (asks first), X data source and key, spending rules, optional Telegram pairing |
 | `npm run doctor` | Self-check: Node, dependencies, baw, wallet sign-in, Developer Mode, BNB, config, X key, Telegram |
-| `npm run service install / status / uninstall` | Runs the radar, dashboard and Telegram bot in the background with auto-restart (launchd on macOS; pm2 commands elsewhere) |
+| `npm run service install / status / uninstall` | Runs the radar, dashboard, Telegram bot and background jobs (only if enabled) in the background with auto-restart (launchd on macOS; pm2 commands elsewhere) |
 | `npm run check` | Pre-publish privacy scan: wallet addresses, transaction hashes, local paths, emails, key-like strings and seed phrases |
-| `npm test` | 39 unit tests: spending rules, preview gate, quote detection, Telegram message formatting, multiple wallets |
+| `npm test` | 68 unit tests: spending rules, preview gate, quote detection, Telegram message formatting, multiple wallets, take-profit stages, Element log parsing, dashboard grouping, auto-claim / redeem checks |
 
 The repository's GitHub Actions also run the syntax check, unit tests and privacy scan on every commit.
 
@@ -269,6 +273,20 @@ For minting free projects with several AI wallets. The wallet list lives in `dat
 
 The dashboard header gets a wallet switcher (shown only with 2+ wallets): one wallet or "all wallets" combined (held count, value and cost summed per contract). A secondary wallet's holdings list is `data/wallets/<id>/watch.json`. The radar also checks secondary wallets every round (signed out, developer mode, low BNB; the same problem is reported at most once every 2 hours, prefixed with `[wallet-id]`). In Telegram, `/status` shows one block per wallet and `/today` groups by wallet.
 
+### 12. Background jobs (auto)
+`src/auto/` · `npm run auto` (`npm run auto:dry` for one dry round) · background: `npm run service install` (installed only if something is enabled; log in `logs/auto.log`)
+
+| Job | Switch | Default | What it does |
+|---|---|---|---|
+| **Element market watch** | `marketWatch.enabled` | on (read-only) | Every 30 min reads fills, bids and cancels on the Element exchange. Alerts once when there were ≥3 fills in 3 days with the last ≥ $2, or a live bid ≥ $5 on **token ids we hold**. The dashboard uses it for "can sell / market but no buyers" |
+| **Scheduled auto-claim** | `auto.claims.enabled` | **off** | Claims registered in `data/claims.json`: at the time, simulate, then preview; executes only with no debits at all, no approvals, no risk flags, no App confirmation, and the registered token received. The token is added to holdings |
+| **Card-to-token redeem** | `auto.redeem.enabled` | **off** | When someone on-chain burns a card and receives a token, replays the same call for your cards; zero approvals, zero payment, only this wallet's own cards; the preview may only take those cards and must deliver the token |
+| **Auto take-profit** | `auto.takeProfit.enabled` | **off** | Tokens in holdings with a cost: at 3x sell the cost basis, at 10 / 30 / 50 / 100 / 150 / 200x sell 20% of what is left, after the 10x stage a fall back to 3x sells half. Per token: `hold` (never sell), `sellOnce` (sell once), `firstTp`, `ladder`, `back3`. Sells into BNB only, never buys; when Binance requires App confirmation you are notified |
+
+- The three transaction-sending jobs are **off by default**; switches must be `true` / `false` (no quotes – a typo exits with an error). Read [docs/auto.md](binance-ai-wallet-tools/docs/auto.md) (Chinese) first: rules, file formats and risks for each.
+- Everything goes through `baw contract-call preview` → `execute` (take-profit uses `baw market-order swap`), shares the mint lock, logs every step and re-checks the wallet session before executing. **No Permit / Permit2, no setApprovalForAll, no approvals, no transfers.**
+- After changing the config, run `npm run service install` again.
+
 ## Security design
 
 | Risk | Defence |
@@ -276,6 +294,7 @@ The dashboard header gets a wallet switcher (shown only with 2+ wallets): one wa
 | Instructions hidden in posts / web pages for the AI (injection) | External content is data only; no external scripts, installs or downloads; stop and log when seen |
 | Contracts that secretly take money or ask for approval | Every transaction goes through Binance's official preview first; extra debits, approvals or risk flags mean no execution (hard-coded) |
 | The AI spending on and on | Free only by default; paying must be enabled by you and is capped per unit and per project (cumulative), plus an optional daily cap; one mint at a time |
+| Background jobs selling / claiming / redeeming wrongly | Off by default; once on, every transaction is simulated and previewed first, and any debit, approval or risk flag stops it; take-profit only sells registered tokens and only into BNB |
 | Misconfiguration | Wrong types or formats exit with an error instead of silently using other values |
 | Leaked keys | The private key is in Binance custody and unreachable; X, xAI and Telegram keys live only in `~/.config/binance-ai-wallet-tools/secrets.json` (600) – never in the repo, logs or the AI process |
 | Other web pages reading or attacking the dashboard | Local only, GET only, Host header check, all external content escaped, private metadata addresses refused |
@@ -338,6 +357,14 @@ Then tell the AI "**start watching for new projects**". Free projects that pass 
 | | `freeMints` | `false` | Push every successful free mint |
 | `agent` | `enabled` / `command` | off | Unattended mode, see [docs/agents.md](binance-ai-wallet-tools/docs/agents.md) |
 | `dashboard` | `host` / `port` | `127.0.0.1` / `8790` | Dashboard address (local only) |
+| `rpc` | `logsMaxRange` | `49000` | Max blocks per `eth_getLogs`; set it to your RPC's limit (some allow only 5000); halves automatically when the RPC complains |
+| `radar` | `flap.enabled` | `false` | Also read new Flap Agent markets each round (read-only), pushed with sound |
+| `marketWatch` | `enabled` | `true` | Element market watch (read-only), run by the auto job |
+| | `everyMinutes` / `firstBlocks` | `30` / `900000` | How often / how far back at most |
+| | `minFills` / `minFillUsd` / `minBidUsd` | `3` / `2` / `5` | Alert rule: fills in 3 days and last price, or a bid on our token ids |
+| `auto` | `claims.enabled` | `false` | Scheduled claims from `data/claims.json` (sends transactions) |
+| | `redeem.enabled` / `everyMinutes` / `firstBlocks` | `false` / `10` / `20000` | Card-to-token redeem (sends transactions) |
+| | `takeProfit.enabled` / `everyMinutes` / `slippage` | `false` / `2` / `10` | Auto take-profit (sells tokens), slippage in percent |
 
 ## Data files
 All in `data/`, yours only, never committed:
@@ -346,7 +373,7 @@ All in `data/`, yours only, never committed:
 |---|---|
 | `projects.json` | Project ledger: rating, status, official site and account, contracts, project card, outcome |
 | `wallets.json` | Multiple-wallet list (optional, see [Multiple wallets](#11-multiple-wallets)); a secondary wallet's holdings are in `wallets/<id>/watch.json` |
-| `watch.json` | Holdings: `collections` (NFTs: contracts, token ids, cost, market config, maintained by mint) and `tokens` (`{ id, name, symbol, contract, cost: { BNB or USDT } }`, added by the AI when it buys a token) |
+| `watch.json` | Holdings: `collections` (NFTs: contracts, token ids, cost, market config, maintained by mint) and `tokens` (`{ id, name, symbol, contract, cost: { BNB or USDT } }`, added by the AI when it buys a token; optional take-profit fields `hold`, `sellOnce`, `firstTp`, `ladder`, `back3`; a collection or token can be marked `writtenOff: { label, note }`) |
 | `realized.json` | Realized P&L: one entry per sale `{ ts, project, name, cost: {…}, proceeds: {…}, tx? }`; the dashboard's P&L card is computed from it; add `wallet` for a secondary wallet's sales |
 | `events.jsonl` | Every logged step (append-only) |
 | `spend.jsonl` | Spending ledger (daily and per-project caps are computed from it; with multiple wallets each entry has `wallet`) |
@@ -354,6 +381,10 @@ All in `data/`, yours only, never committed:
 | `watch-accounts.json` | Followed official accounts |
 | `fingerprints.json` | Contract interface fingerprints (template detection) |
 | `radar-*.json(l)` | Radar state and leads |
+| `claims.json` | Scheduled claims (optional, format in [docs/auto.md](binance-ai-wallet-tools/docs/auto.md)) |
+| `market-watch.json` | Element watch progress and the last 7 days of fills / bids |
+| `take-profit-state.json` / `redeem-state.json` | Which take-profit stages ran, pending sell orders; redeem samples and progress |
+| `flap-state.json` | How many Flap markets were seen |
 
 ## FAQ
 

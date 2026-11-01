@@ -6,7 +6,8 @@
   "rpc": {
     "call": "https://bsc-dataseed.bnbchain.org",
     "logs": "https://bsc-rpc.publicnode.com",
-    "logsMaxRange": 49000
+    "logsMaxRange": 49000,
+    "_logsMaxRange": "eth_getLogs 一次最多查多少块。换了 RPC 要按它的限制改（有的只允许 5000）；RPC 嫌范围太大或结果太多时会自动减半重试"
   },
   "dashboard": {
     "host": "127.0.0.1",
@@ -83,6 +84,10 @@
     "maxCasPerTweet": 3,
     "watchChunk": 8,
     "_watchChunk": "已参与项目的官推每几个一组查询（最多 10）。每条 queries 也可以单独写 pages（翻几页）",
+    "flap": {
+      "enabled": false,
+      "_enabled": "可选：每轮顺便读 Flap「Agent Curve」新盘（只读链，不发交易），日志里写 FLAP 行，Telegram 推送并响铃。默认关"
+    },
     "queries": [
       {
         "id": "agentid",
@@ -120,5 +125,35 @@
       "0x55d398326f99059fF775485246999027B3197955",
       "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"
     ]
+  },
+  "marketWatch": {
+    "_说明": "Element（BSC 上主要的 NFT 交易所）市场监控：只读链上真实成交和求购，不授权、不挂单。由后台服务 auto 运行（npm run auto / npm run service install）。看板据此把持仓分到「能卖 / 有市场没买家」。",
+    "enabled": true,
+    "everyMinutes": 30,
+    "firstBlocks": 900000,
+    "_firstBlocks": "第一次 / 停了很久之后最多往回扫多少块（约 4–5 天）",
+    "minFills": 3,
+    "minFillUsd": 2,
+    "minBidUsd": 5,
+    "_min": "报的规则：近 3 天成交 ≥ minFills 笔且最近一笔 ≥ minFillUsd 美元；或有人出价 ≥ minBidUsd 美元求购我们手上的编号。每个系列只报一次"
+  },
+  "auto": {
+    "_说明": "会发交易的自动功能，全部默认关。打开前先读 docs/auto.md（每项的规则和风险）。改完重启后台服务：npm run service install",
+    "claims": {
+      "enabled": false,
+      "_enabled": "到点自动领取 data/claims.json 里登记的代币：预演必须零扣款、零授权、零风险提示、收到登记的代币才执行"
+    },
+    "redeem": {
+      "enabled": false,
+      "everyMinutes": 10,
+      "firstBlocks": 20000,
+      "_enabled": "卡 / NFT 自动兑换代币：照抄链上别人的兑换调用，只做零授权、零付费、用本钱包自己的卡；预演只交卡、收到代币才执行"
+    },
+    "takeProfit": {
+      "enabled": false,
+      "everyMinutes": 2,
+      "slippage": 10,
+      "_enabled": "自动止盈：watch.json 里登记了成本的代币，3 倍卖回本钱、10/30/50/100/150/200 倍各卖剩余 20%、到过 10 倍跌回 3 倍卖一半；只换回 BNB，从不买入。单个代币可设 hold / sellOnce / firstTp / ladder / back3，见 docs/auto.md"
+    }
   }
 }

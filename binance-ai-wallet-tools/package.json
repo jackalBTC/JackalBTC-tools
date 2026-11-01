@@ -1,6 +1,6 @@
 {
   "name": "binance-ai-wallet-tools",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "description": "币安 AI 钱包（Binance Agentic Wallet）打新与投研助手：X 雷达 + 合约核验 + 预演把关的安全铸造 + 本地只读看板。配合 Claude Code / Codex 等 AI 编程助手使用，也可手动使用。",
   "type": "module",
   "license": "MIT",
@@ -15,6 +15,8 @@
     "radar": "node src/radar/radar.mjs",
     "radar:once": "node src/radar/radar.mjs --once",
     "telegram": "node src/telegram/bot.mjs",
+    "auto": "node src/auto/auto.mjs",
+    "auto:dry": "node src/auto/auto.mjs --dry",
     "service": "node scripts/service.mjs",
     "check": "node scripts/check.mjs",
     "wallet": "node scripts/wallet.mjs",

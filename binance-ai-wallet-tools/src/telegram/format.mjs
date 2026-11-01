@@ -5,18 +5,20 @@ const clip = (s, n) => { s = String(s ?? ''); return s.length > n ? s.slice(0, n
 const oneLine = s => String(s ?? '').replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, ' ').trim();
 
 // 雷达日志一行 → { kind, text } 或 null。kind: CANDIDATE / HOT / PAID / UPDATE / LOWBNB / NOTCONNECTED / DEVMODE / ERR
+// FLAP：Flap Agent Curve 新盘（同样用「｜」分隔），默认响铃
 // PAID：付费项目简报（字段用「｜」分隔，推送时每段一行），默认响铃
 // 日志格式：<时间> <KIND> <其余…>
 export function parseRadarLine(line) {
-  const m = oneLine(line).match(/^\S+ \S+ (CANDIDATE|HOT|PAID|UPDATE|ERR(?: [A-Z]+)?|AGENT|ROUND)\s+(.*)$/);
+  const m = oneLine(line).match(/^\S+ \S+ (CANDIDATE|HOT|PAID|FLAP|UPDATE|ERR(?: [A-Z]+)?|AGENT|ROUND)\s+(.*)$/);
   if (!m) return null;
   let kind = m[1], rest = oneLine(m[2]);
   if (kind.startsWith('ERR ')) kind = kind.slice(4);
   if (kind === 'ROUND' || kind === 'AGENT') return null;
   if (kind === 'ERR' && /本轮.*没取完|上一轮还没结束/.test(rest)) return null;   // 技术性提示不推
   const url = (rest.match(/https:\/\/(?:x|twitter)\.com\/[A-Za-z0-9_]+\/status\/\d+/) || [])[0] || '';
-  const icon = { CANDIDATE: '🆕 新线索', PAID: '💸 付费项目 · 等你决定', HOT: '🔥 多人在传', UPDATE: '📣 官推动态', LOWBNB: '⛽ BNB 不足', NOTCONNECTED: '🔌 钱包掉线', DEVMODE: '🛠 开发者模式', ERR: '⚠️ 雷达出错' }[kind] || kind;
+  const icon = { CANDIDATE: '🆕 新线索', PAID: '💸 付费项目 · 等你决定', FLAP: '🦋 Flap Agent 新盘', HOT: '🔥 多人在传', UPDATE: '📣 官推动态', LOWBNB: '⛽ BNB 不足', NOTCONNECTED: '🔌 钱包掉线', DEVMODE: '🛠 开发者模式', ERR: '⚠️ 雷达出错' }[kind] || kind;
   const body = rest.replace(url, '').replace(/\s+/g, ' ').trim();
+  if (kind === 'FLAP') return { kind, text: clip(`${icon}\n${body.replace(/｜/g, '\n')}\n（要打回 AI「打 <符号> <金额>」）`, 1200) };
   if (kind === 'PAID') return { kind, text: clip(`${icon}\n${body.replace(/｜/g, '\n')}\n（回 AI「打 / 不打」）`, 1200) };
   return { kind, text: clip(`${icon}\n${body}${url ? '\n' + url : ''}`, 900) };
 }
@@ -56,7 +58,7 @@ export function newsList(news, projects = [], n = 5) {
   return '📣 最近的项目动态\n\n' + list.map(x => formatNews(x, projects)?.text).filter(Boolean).join('\n\n');
 }
 
-export const KIND_LABEL = { NEWS: '项目动态', PAID: '付费项目简报', CANDIDATE: '新线索', HOT: '多人在传', UPDATE: '官推动态', MINT: '铸造成功', PENDING: '等你决定', ABORT: '中止', LOWBNB: 'BNB 不足', NOTCONNECTED: '钱包掉线', DEVMODE: '开发者模式', ERR: '雷达出错' };
+export const KIND_LABEL = { NEWS: '项目动态', PAID: '付费项目简报', FLAP: 'Flap Agent 新盘', CANDIDATE: '新线索', HOT: '多人在传', UPDATE: '官推动态', MINT: '铸造成功', PENDING: '等你决定', ABORT: '中止', LOWBNB: 'BNB 不足', NOTCONNECTED: '钱包掉线', DEVMODE: '开发者模式', ERR: '雷达出错' };
 
 // 「今天」的铸造汇总：笔数 + 项目数；多钱包（事件带 wallet 字段，没有的算主钱包）时按钱包分组
 export function todaySummary(events, now = new Date(), mainLabel = '主钱包') {

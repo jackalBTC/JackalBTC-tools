@@ -6,6 +6,27 @@ What changed in each version, newest first. To upgrade: `git pull` in the repo, 
 
 ---
 
+## v0.4.0 — 2026-11-01 · Market watch and auto jobs
+
+### New
+- **Dashboard holdings groups**: "Holdings & market" is now grouped by what is actually going on – **can sell** (a real price exists), **market but no buyers** (Element fills but nobody bids on our token ids, or a market with no listings), **new**, **quiet**, **exited**, **written off**. Exited cards only show total cost, total returned and net P&L (from `realized.json`), or "no sale records".
+- **Element market watch** (read-only, on by default): every 30 minutes reads fills, bids and cancels on the Element exchange. When there were ≥3 fills in 3 days with the last ≥ $2, or someone bids ≥ $5 on **token ids we hold**, an "important" update is pushed (once per collection). Only real trades count; "many holders approved a marketplace" is no longer taken as a market.
+- **New background service `auto`** (`npm run auto`, `npm run auto:dry` for a dry run): `npm run service install` runs it when anything is enabled. The three jobs below send transactions and are **all off by default**; read `docs/auto.md` first:
+  - **Scheduled auto-claim** (`auto.claims.enabled`): claims registered in `data/claims.json` are simulated, then previewed at the set time, and executed only when the preview has no debits, no approvals, no risk flags, needs no App confirmation and delivers the registered token. The token is added to holdings.
+  - **Card-to-token redeem** (`auto.redeem.enabled`): when someone on-chain burns a card and receives a token, the same call is replayed for your cards. Zero approvals, zero payment, only this wallet's own cards; the preview may only take those cards and must deliver the token.
+  - **Auto take-profit** (`auto.takeProfit.enabled`): at 3x sell the cost basis, at 10 / 30 / 50 / 100 / 150 / 200x sell 20% of what is left, after the 10x stage a fall back to 3x sells half. Per token: `hold: true` (never auto-sell), `sellOnce: 0.5` (sell that share once), `firstTp`, `ladder`, `back3: false`. Only sells tokens in your holdings, only into BNB, never buys; when Binance requires confirmation in the App (error 30003001) you get a ringing alert to confirm.
+- **Flap Agent new-market alerts** (radar option `radar.flap.enabled`, off by default): pushed as "🦋 Flap Agent new market" with sound, with quote token, taxes, max per wallet and a short verdict. Names carrying web code or instructions are hidden.
+- Token cards show how much take-profit sold, what came back and the remaining cost.
+
+### Improved
+- On-chain log queries are split by `rpc.logsMaxRange` and halve automatically when the RPC says the range or result is too large; some RPCs allow only 5000 blocks, so lower it when you switch RPC.
+
+### Security
+- The auto jobs contain no approval, Permit / Permit2, setApprovalForAll or transfer code at all; every transaction is `eth_call`-simulated and `baw`-previewed first, shares the mint lock, re-checks the wallet session and logs every step.
+- A malformed switch for the auto jobs (e.g. `"true"` in quotes) exits with an error.
+
+---
+
 ## v0.3.3 — 2026-10-31 · Only what costs money
 
 ### Improved

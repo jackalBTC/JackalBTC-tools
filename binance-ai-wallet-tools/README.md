@@ -94,10 +94,11 @@ src/cli/                                 mint（安全铸造）、mint-all（多
 src/lib/rules.mjs                        花钱规则与预演检查（test/ 里有单元测试，npm test）
 src/server/                              本地只读看板
 src/telegram/                            Telegram 机器人（推送 + 只读查询）
+src/auto/                                后台自动任务（可选）：Element 市场监控（只读）、到点领取 / 自动兑换 / 自动止盈（会发交易，默认关，见 docs/auto.md）
 src/lib/wallets.mjs                      多钱包（data/wallets.json，可选；见上层 README「多钱包」）
 scripts/                                 setup、service（后台托管）、check（发布前隐私检查）、wallet（多钱包管理）
 data/  logs/                             你的台账、日志（不进 git）
-docs/                                    数据源、市场适配、AI 工具、Telegram（中 / 英）、安全模型
+docs/                                    数据源、市场适配、AI 工具、Telegram（中 / 英）、自动任务、安全模型
 ```
 
 ## 常见问题

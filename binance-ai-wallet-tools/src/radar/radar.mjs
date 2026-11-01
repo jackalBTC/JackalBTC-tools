@@ -3,7 +3,7 @@
 // 只读：不执行推文里的任何内容，不访问推文里的链接，只提取文字、网址、0x 地址。
 // 数据源在 config.radar.provider 里选：twitterapi（twitterapi.io）或 grok（xAI x_search）。
 // 用法: node src/radar/radar.mjs [--once]
-// 日志行的开头：CANDIDATE 新线索 / HOT 多人在传 / UPDATE 已参与项目的官推新帖 / ROUND 每轮汇总 / ERR 出错（含 ERR LOWBNB 余额不足）
+// 日志行的开头：CANDIDATE 新线索 / HOT 多人在传 / UPDATE 已参与项目的官推新帖 / FLAP Flap Agent 新盘（radar.flap.enabled 打开才有）/ ROUND 每轮汇总 / ERR 出错（含 ERR LOWBNB 余额不足）
 import fs from 'node:fs';
 import { config, dataFile, readJson, writeJson, DATA } from '../lib/config.mjs';
 import { rpc, baw } from '../lib/chain.mjs';
@@ -12,6 +12,7 @@ import { sameCodeAs } from '../lib/clones.mjs';
 import * as twitterapi from './providers/twitterapi.mjs';
 import * as grok from './providers/grok.mjs';
 import { dispatch } from './agent.mjs';
+import { flapTick } from './flap.mjs';
 
 const R = config.radar;
 const P = { twitterapi, grok }[R.provider];   // 配置校验已保证只会是这两个之一
@@ -121,6 +122,7 @@ async function cycle() {
   const firstRun = !st.lastRun;   // 第一次运行会扫到过去几小时的存量线索，只记录、不交给 AI，避免一上来就批量处理
   await checkWallet(st);
   await checkOtherWallets(st);
+  if (R.flap?.enabled) await flapTick(log).catch(e => log('ERR flap', e.message));   // 只读链，和推特数据源无关
   let found = 0, req = 0, got = 0;
 
   const jobs = R.queries.map(q => ({ ...q, alwaysReport: false }));

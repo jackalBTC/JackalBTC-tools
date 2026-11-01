@@ -38,7 +38,25 @@ function validate(cfg) {
   if (cfg.telegram && (!Array.isArray(cfg.telegram.chatIds) || cfg.telegram.chatIds.some(x => !/^-?\d+$/.test(String(x))))) errs.push('telegram.chatIds 必须是数字 id 的数组');
   if (cfg.telegram?.notify && !Array.isArray(cfg.telegram.notify)) errs.push('telegram.notify 必须是数组');
   if (cfg.agent?.enabled && (!Array.isArray(cfg.agent.command) || !cfg.agent.command.length || !cfg.agent.command.some(x => String(x).includes('{prompt}')))) errs.push('agent.command 必须是数组，并且包含 {prompt}');
-  if (cfg.dashboard?.host && !['127.0.0.1', 'localhost', '::1'].includes(cfg.dashboard.host)) errs.push('dashboard.host 只能是本机地址（127.0.0.1 / localhost）');
+  if (cfg.radar?.flap && typeof cfg.radar.flap.enabled !== 'boolean') errs.push('radar.flap.enabled 必须是 true 或 false');
+  if (!(cfg.rpc?.logsMaxRange >= 100)) errs.push('rpc.logsMaxRange 必须是不小于 100 的数字');
+  const num = (v, min) => typeof v === 'number' && Number.isFinite(v) && v >= min;
+  const mw = cfg.marketWatch;
+  if (mw) {
+    if (typeof mw.enabled !== 'boolean') errs.push('marketWatch.enabled 必须是 true 或 false');
+    if (!num(mw.everyMinutes, 5)) errs.push('marketWatch.everyMinutes 至少 5');
+    for (const k of ['firstBlocks', 'minFills', 'minFillUsd', 'minBidUsd']) if (!num(mw[k], 0)) errs.push(`marketWatch.${k} 必须是不小于 0 的数字`);
+  }
+  // 会发交易的自动功能：开关必须明确写 true / false，写错直接退出（不会因为写成 "true" 字符串就悄悄打开或关掉）
+  for (const k of ['claims', 'redeem', 'takeProfit']) {
+    const a = cfg.auto?.[k];
+    if (a && typeof a.enabled !== 'boolean') errs.push(`auto.${k}.enabled 必须是 true 或 false（不要加引号）`);
+    if (a && a.everyMinutes != null && !num(a.everyMinutes, 1)) errs.push(`auto.${k}.everyMinutes 至少 1`);
+  }
+  if (cfg.auto?.redeem && !num(cfg.auto.redeem.firstBlocks, 0)) errs.push('auto.redeem.firstBlocks 必须是不小于 0 的数字');
+  const sl = cfg.auto?.takeProfit?.slippage;
+  if (cfg.auto?.takeProfit && !(num(sl, 0.1) && sl <= 50)) errs.push('auto.takeProfit.slippage 必须是 0.1–50 之间的数字（百分比）');
+  if (cfg.dashboard?.host &&!['127.0.0.1', 'localhost', '::1'].includes(cfg.dashboard.host)) errs.push('dashboard.host 只能是本机地址（127.0.0.1 / localhost）');
   if (errs.length) { console.error('config/config.json 有错：\n  - ' + errs.join('\n  - ')); process.exit(78); }
   return cfg;
 }

@@ -505,22 +505,37 @@ async function loadPositions(retry = 0) {
 }
 let POSD = null, POSF = 'open';
 try { POSF = localStorage.getItem('lh-posf') || 'open'; } catch {}
-const isOpen = p => p.marketType && p.marketType !== 'none';
+// 分组由服务器算好（p.tier，规则见 src/lib/tiers.mjs）：能卖 / 有市场没买家 / 新打的 / 沉寂 / 已清仓 / 已核销
+const TIER_TABS = [['open', '能卖'], ['nobid', '有市场没买家'], ['new', '新打的'], ['idle', '沉寂'], ['exit', '已清仓'], ['dead', '已核销']];
+const TIER_EMPTY = { open: '还没有能卖出钱的持仓', nobid: '没有「有市场但没人买」的持仓', new: '最近 24 小时没有新打的', idle: '没有沉寂的项目', exit: '没有清仓的项目', dead: '没有核销的项目' };
 function renderPositions() {
   const d = POSD; if (!d) return;
-  const open = d.positions.filter(isOpen), closed = d.positions.filter(p => !isOpen(p));
-  $('#posFilter').innerHTML = [['open', '市场已开放', open.length], ['closed', '市场未开放', closed.length], ['all', '全部', d.positions.length]]
+  const G = Object.fromEntries(TIER_TABS.map(([k]) => [k, []]));
+  for (const p of d.positions) (G[p.tier] || G.new).push(p);
+  if (![...TIER_TABS.map(([k]) => k), 'all'].includes(POSF)) POSF = 'open';
+  $('#posFilter').innerHTML = [...TIER_TABS.map(([v, t]) => [v, t, G[v].length]), ['all', '全部', d.positions.length]].filter(([v, , n]) => n || v === 'open' || v === 'all')
     .map(([v, t, n]) => `<button class="${v === POSF ? 'act' : ''}" data-f="${v}">${t}<span class="c">${n}</span></button>`).join('');
-  const list = POSF === 'open' ? open : POSF === 'closed' ? closed : d.positions;
-  if (!list.length) { $('#positions').innerHTML = `<div class="empty">${POSF === 'open' ? '还没有已开市场的持仓' : '没有未开市场的持仓'}</div>`; return; }
+  const list = POSF === 'all' ? d.positions : G[POSF] || [];
+  if (!list.length) { $('#positions').innerHTML = `<div class="empty">${TIER_EMPTY[POSF] || '没有持仓'}</div>`; return; }
+  if (POSF === 'idle') list.sort((a, b) => (b.lastNews || b.firstMint || 0) - (a.lastNews || a.firstMint || 0));
   {
     $('#positions').innerHTML = list.map(p => {
       const sane = v => v != null && isFinite(v) && v < 1e9 ? v : null;
-      const price = sane(p.floor), kind = p.kind === 'token' ? (p.floor != null ? '现价' : null) : p.floor != null ? '地板价' : null;
+      const addrLink = `<a class="addr" href="${scan(p.contract)}" target="_blank" data-copy="${esc(p.contract)}"><span>${short(p.contract)}</span><i class="ph ph-copy"></i></a>`;
+      if (p.held === 0 && !p.writtenOff) {   // 已清仓：只给账本结果，不再显示报价
+        const rz = p.realized, rc = rz ? costUsd(rz.cost) || 0 : null, rp = rz ? costUsd(rz.proceeds) || 0 : null, net = rz ? rp - rc : null;
+        const rows2 = rz ? [['累计成本', `<b class="num">${costTxt(rz.cost)}</b>`], ['累计收回', `<b class="num">${costTxt(rz.proceeds)}</b><span class="muted"> · ${rz.n} 笔记录</span>`], ['净盈亏', `<b class="num${net >= 0 ? ' accent' : ''}"${net >= 0 ? '' : ' style="color:var(--bad)"'}>${net >= 0 ? '+' : ''}${usd(net)}</b>`]] : [['账本', '<span class="muted">没有卖出记录</span>']];
+        return `<article class="card pc"><div class="top"><div class="nm">${esc(p.name)}</div><span class="mk">已清仓</span></div>
+        ${net != null ? `<span class="pl ${net >= 0 ? 'up' : 'down'} num">已实现 ${net >= 0 ? '+' : ''}${usd(net)}</span>` : ''}
+        <div style="margin-top:10px">${rows2.map(([k, v]) => `<div class="metric"><span>${k}</span><span>${v}</span></div>`).join('')}</div>
+        <div class="foot" style="margin-top:12px;padding-top:12px">${addrLink}</div></article>`;
+      }
+      const price = sane(p.floor) ?? sane(p.bid) ?? null, kind = p.kind === 'token' ? (p.floor != null ? '现价' : null) : p.floor != null ? '地板价' : p.bid != null ? '最高求购' : null;
       const dec = p.kind === 'token' ? (price != null && price < 1 ? Math.min(12, 3 - Math.floor(Math.log10(price))) : 4) : p.currency === 'BNB' ? 5 : 2;
       const val = sane(p.value) != null ? toUsd(p.value, p.currency) : null, cu = costUsd(p.cost);
-      const pnl = val != null && cu != null && !isNaN(cu) ? val - cu : null;
-      const mk = p.kind === 'token' ? (p.marketType === 'dex' ? `<span class="mk live">已开盘</span>` : `<span class="mk">未开盘</span>`) : p.marketType === 'none' ? `<span class="mk">暂无市场</span>` : p.marketType === 'link' ? `<span class="mk">外部市场</span>` : `<span class="mk live">链上市场</span>`;
+      const sc = p.soldCost ? costUsd(p.soldCost) || 0 : 0, sp = p.soldProceeds ? costUsd(p.soldProceeds) || 0 : 0;   // 止盈已卖出的部分：成本 / 收回
+      const pnl = val != null && cu != null && !isNaN(cu) ? val + sp - cu : null;
+      const mk = p.writtenOff ? `<span class="mk" style="color:var(--bad);border-color:var(--bad)">${esc(p.writtenOff.label || '已核销')}</span>` : p.kind === 'token' ? (p.marketType === 'dex' ? `<span class="mk live">已开盘</span>` : `<span class="mk">未开盘</span>`) : p.marketType === 'none' ? (p.el?.fills ? `<span class="mk">Element 有成交</span>` : `<span class="mk">暂无市场</span>`) : p.marketType === 'link' ? `<span class="mk">外部市场</span>` : `<span class="mk live">链上市场</span>`;
       const held = p.heldByRarity || {}, rar = Object.keys(held);
       const order = r => RANK[r] ?? 9;
       const rarRows = p.byRarity && rar.length ? rar.sort((a, b) => order(a) - order(b)).map(r => {
@@ -528,19 +543,23 @@ function renderPositions() {
         return [`<span class="rar ${rarCls(r)}">${RZH[r] || esc(r)}</span> <span class="num">×${held[r]}</span>`,
           f ? `<b class="num">${fmt(f.floor, dec)} ${esc(p.currency)}</b><span class="muted"> · 在售 ${f.listed}</span>` : `<span class="muted">该档无挂单，暂按整体地板价</span>`];
       }) : [];
+      const noPrice = p.listed === 0 ? '市场已开，暂无挂单' : p.el?.fills ? `没人求购我们的编号 · 近 7 天 Element 成交 ${p.el.fills} 笔${p.el.last ? `，最近一笔 ${fmt(p.el.last.p, 6)} ${esc(p.el.last.cur)}` : ''}` : esc(p.note || '暂无报价');
       const rows = [
-        ['成本', `<b class="num">${costTxt(p.cost)}</b>`],
-        [kind ? (p.byRarity && rar.length ? '整体' + kind : kind) : '市场价', price != null ? `<b class="num">${fmt(price, dec)} ${esc(p.currency)}</b>${p.listed != null ? `<span class="muted"> · 在售 ${p.listed}</span>` : ''}${p.liquidity != null ? `<span class="muted"> · 池子 ${usd(p.liquidity)}</span>` : ''}` : `<span class="muted">${p.listed === 0 ? '市场已开，暂无挂单' : esc(p.note || '暂无报价')}</span>`],
+        ['成本', `<b class="num">${costTxt(p.cost)}</b>${p.writtenOff ? '<span style="color:var(--bad)"> · 已全额计亏损</span>' : ''}`],
+        ...(p.soldQty != null ? [['已卖出', `<b class="num">${fmt(p.soldQty, 0)} 枚</b><span class="muted"> · 收回 ${costTxt(p.soldProceeds)}</span>`],
+          ['剩余成本', cu != null && !isNaN(cu) ? `<b class="num">${usd(Math.max(0, cu - sc))}</b>${cu - sc <= 0 ? '<span class="accent"> · 已回本</span>' : ''}` : '<span class="muted">-</span>']] : []),
+        ...(p.writtenOff?.note ? [['备注', `<span style="color:var(--bad)">${esc(p.writtenOff.note)}</span>`]] : []),
+        [kind ? (p.byRarity && rar.length ? '整体' + kind : kind) : '市场价', price != null ? `<b class="num">${fmt(price, dec)} ${esc(p.currency)}</b>${p.listed != null ? `<span class="muted"> · 在售 ${p.listed}</span>` : ''}${p.liquidity != null ? `<span class="muted"> · 池子 ${usd(p.liquidity)}</span>` : ''}${p.el?.bids ? `<span class="muted"> · ${p.el.bids} 个编号有人求购</span>` : ''}` : `<span class="muted">${noPrice}</span>`],
         ...rarRows,
         [rarRows.length ? '按稀有度估值' : '估算市值', val != null ? `<b class="num">${usd(val)}</b>` : '<span class="muted">-</span>'],
       ];
       return `<article class="card pc"><div class="top"><div class="nm">${esc(p.name)}</div>${mk}</div>
         <div class="held num">${p.kind === 'token' ? fmt(p.held, 0) : p.held}<small>${p.kind === 'token' ? esc(p.symbol || '枚') : '张'}</small></div>
-        ${pnl != null ? `<span class="pl ${pnl >= 0 ? 'up' : 'down'} num">${rarRows.length ? '按稀有度估算' : '按' + kind + '估算'} ${pnl >= 0 ? '+' : ''}${usd(pnl)}</span>` : ''}
+        ${pnl != null ? `<span class="pl ${pnl >= 0 ? 'up' : 'down'} num">${rarRows.length ? '按稀有度估算' : '按' + kind + '估算' + (p.soldQty != null ? '（含已卖出）' : '')} ${pnl >= 0 ? '+' : ''}${usd(pnl)}</span>` : ''}
         ${p.supply && p.supply.minted != null ? (() => { const m = p.supply.minted, x = p.supply.max, pct = x ? Math.min(100, m / x * 100) : null, done = x && m >= x;
           return `<div class="prog"><div class="pr-top"><span>铸造进度</span><span class="num">${fmt(m, 0)}${x ? ' / ' + fmt(x, 0) : ''}${pct != null ? `<b class="${done ? '' : 'accent'}"> ${done ? '已铸完' : fmt(pct, 1) + '%'}</b>` : ''}</span></div>${pct != null ? `<div class="gauge"><span style="width:${pct}%;${done ? 'background:var(--text-3)' : ''}"></span></div>` : ''}</div>`; })() : ''}
         <div style="margin-top:10px">${rows.map(([k, v]) => `<div class="metric"><span>${k}</span><span>${v}</span></div>`).join('')}</div>
-        <div class="foot" style="margin-top:12px;padding-top:12px">${p.url ? `<a class="addr" href="${safeUrl(p.url)}" target="_blank" rel="noreferrer"><i class="ph ph-storefront"></i><span>去市场</span></a>` : ''}<a class="addr" href="${scan(p.contract)}" target="_blank" data-copy="${esc(p.contract)}"><span>${short(p.contract)}</span><i class="ph ph-copy"></i></a></div></article>`;
+        <div class="foot" style="margin-top:12px;padding-top:12px">${p.url ? `<a class="addr" href="${safeUrl(p.url)}" target="_blank" rel="noreferrer"><i class="ph ph-storefront"></i><span>去市场</span></a>` : ''}${addrLink}</div></article>`;
     }).join('');
   }
 }

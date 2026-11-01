@@ -21,7 +21,7 @@ if (!token) { log('ERR', '没有 Telegram 机器人 token，运行 npm run setup
 const API = m => `https://api.telegram.org/bot${getSecret('telegram')}/${m}`;
 const allowed = new Set((T.chatIds || []).map(String));
 // 默认推送的类型（config 的 telegram.notify 可覆盖）。免费铸造成功默认不逐笔推（telegram.freeMints: true 打开），看每晚总结
-const notifyKinds = new Set(T.notify || ['NEWS', 'PAID', 'CANDIDATE', 'HOT', 'MINT', 'PENDING', 'ABORT', 'LOWBNB', 'NOTCONNECTED', 'DEVMODE', 'ERR']);
+const notifyKinds = new Set(T.notify || ['NEWS', 'PAID', 'FLAP', 'CANDIDATE', 'HOT', 'MINT', 'PENDING', 'ABORT', 'LOWBNB', 'NOTCONNECTED', 'DEVMODE', 'ERR']);
 const newsLevels = new Set(T.newsLevels || ['重要', '机会', '注意']);
 const RADAR_LOG = T.radarLog ? path.resolve(ROOT, T.radarLog) : path.join(ROOT, 'logs/radar.log');   // 可在配置里指定雷达日志位置
 
@@ -36,7 +36,7 @@ async function tg(method, body) {
 const sent = [];
 let dropped = 0;
 // loud=false 时静音推送（不响铃）。哪些算重要见 LOUD：钱包掉线 / BNB 不足 / 开发者模式 / 等你决定 / 「重要」级动态（含价格提醒）
-const LOUD = new Set(T.loudKinds || ['PENDING', 'PAID', 'LOWBNB', 'NOTCONNECTED', 'DEVMODE', 'NEWS:重要']);
+const LOUD = new Set(T.loudKinds || ['PENDING', 'PAID', 'FLAP', 'LOWBNB', 'NOTCONNECTED', 'DEVMODE', 'NEWS:重要']);
 async function send(text, chatIds = [...allowed], loud = true) {
   const now = Date.now();
   while (sent.length && now - sent[0] > 60_000) sent.shift();
