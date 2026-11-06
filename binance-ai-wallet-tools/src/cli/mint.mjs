@@ -7,6 +7,7 @@
 //     --args    逗号分隔的参数，{qty} 替换成数量，0x 开头按地址处理；默认 "{qty}"
 //     --wallet  用 data/wallets.json 里的哪个钱包，默认主钱包；副钱包只打免费，除非它设了 "allowPaid": true
 //     --dry     只算计划、不预演不执行、不写日志
+//     --allow-paid-nft  这一次允许付费打 NFT（默认付费 NFT 只出简报）。只有用户在对话里亲口说了「打」这个 NFT 才能加，先用 log.mjs approve 记下原话
 //   不认识的参数会直接报错退出（防止把 --dry 拼错后真的执行）。
 //
 // 花钱规则（config.spending）：
@@ -35,7 +36,7 @@ import { logEvent } from '../lib/events.mjs';
 import { planShare, spentUsdFor, gateValid } from '../lib/sharemint.mjs';
 import { getWallet, readWallets, readWatch, writeWatch, envFor, sessionOk, multiWallet } from '../lib/wallets.mjs';
 
-const USAGE = '用法: node src/cli/mint.mjs <项目id> <合约> <数量> [--fn "mint(uint256)"] [--args "{qty}"] [--wallet <钱包id>] [--free-only] [--dry]';
+const USAGE = '用法: node src/cli/mint.mjs <项目id> <合约> <数量> [--fn "mint(uint256)"] [--args "{qty}"] [--wallet <钱包id>] [--free-only] [--allow-paid-nft] [--dry]';
 const MAX_QTY = 50;
 
 // ---------- 参数（严格） ----------
@@ -43,7 +44,7 @@ const argv = process.argv.slice(2), pos = [], o = {};
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
   if (a === '--fn' || a === '--args' || a === '--wallet' || a === '--share-mint') { if (argv[i + 1] == null) { console.error(`${a} 后面缺少值\n${USAGE}`); process.exit(1); } o[a.slice(2)] = argv[++i]; }
-  else if (a === '--dry' || a === '--free-only') o[a.slice(2)] = true;
+  else if (a === '--dry' || a === '--free-only' || a === '--allow-paid-nft') o[a.slice(2)] = true;
   else if (a.startsWith('-')) { console.error(`不认识的参数 ${a}（为了安全，拼错的参数不会被忽略）\n${USAGE}`); process.exit(1); }
   else pos.push(a);
 }
@@ -170,6 +171,12 @@ if (qty > free && !FREE_ONLY && S.allowAutoPaid === true && !SHARE) {   // 按�
   log('verify', `防骗检查：${dc.verdict}${dc.block.length ? '（' + dc.block.join('；') + '）' : ''}${dc.warn.length ? '｜提醒：' + dc.warn.join('；') : ''}`.slice(0, 600), { contract: to });
   if (dc.block.length) scam = dc.block.join('；').slice(0, 300);
 }
+// 付费 NFT（ERC721 / ERC1155）默认不自动打，只出简报：每天的付费 NFT 大多卖不回成本。spending.allowPaidNft 或 --allow-paid-nft 才放行
+let paidNft = false;
+if (qty > free && !FREE_ONLY && !SHARE && S.allowPaidNft !== true && !o['allow-paid-nft']) {
+  const iface = id => ethCall({ to, data: '0x' + sel('supportsInterface(bytes4)') + id.padEnd(64, '0') }).then(r => r.ok && r.ok.length >= 66 && BigInt(r.ok.slice(0, 66)) === 1n).catch(() => false);
+  paidNft = (await iface('80ac58cd')) || (await iface('d9b67a26'));
+}
 let r2;
 if (SHARE) {
   const budgetUsd = config.shareMint?.budgetUsd;
@@ -177,7 +184,7 @@ if (SHARE) {
   r2 = await planShare({ free, want: qty - free, totalOf }, { budgetUsd, spentUsd, usdPerBnb, maxDailyBnb: S.maxDailyBnb ?? null, spentTodayBnb: spentToday });
   if (!verified) r2 = { paid: 0, total: 0n, notes: ['源码未验证'] };
   log('verify', `按份铸币预算：这个钱包在这个项目已花 ${spentUsd == null ? '?' : '$' + spentUsd.toFixed(2)}，预算 $${budgetUsd}${r2.paid ? `，这次 ${r2.paid} 份 ≈ $${r2.usd.toFixed(2)}` : ''}`, { contract: to });
-} else r2 = await planPaid({ free, paid: qty - free, totalOf }, { spending: S, usdPerBnb, verified, official, freeOnly: FREE_ONLY, clone, scam, spentToday, paidSoFar });
+} else r2 = await planPaid({ free, paid: qty - free, totalOf }, { spending: S, usdPerBnb, verified, official, freeOnly: FREE_ONLY, clone, scam, spentToday, paidSoFar, paidNft });
 let { paid, total, notes } = r2;
 qty = free + paid;
 if (qty === 0) stop('不打：没有免费张，' + (notes.join('、') || '付费部分不符合规则'));

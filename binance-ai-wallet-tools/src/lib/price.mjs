@@ -64,3 +64,28 @@ export async function bestPrice(token) {
   cache.set(k, { at: Date.now(), ttl: gtFail ? PARTIAL_TTL : TTL, v });
   return v;
 }
+
+// ---------- 批量问 DexScreener 有没有池子（止盈用：几百个还没开盘的免费币，逐个问一轮要好几分钟） ----------
+export const DEX_BATCH = 30;
+// DexScreener /latest/dex/tokens/a,b,c 的结果 → 有池子（BSC、有价格）的代币（小写地址）
+export function parseDexOpen(j, tokens) {
+  const want = new Set((tokens || []).map(t => String(t).toLowerCase())), open = new Set();
+  for (const p of j?.pairs || []) {
+    if (p?.chainId !== 'bsc' || !(+p.priceUsd > 0)) continue;
+    for (const a of [p.baseToken?.address, p.quoteToken?.address]) { const k = String(a || '').toLowerCase(); if (want.has(k)) open.add(k); }
+  }
+  return open;
+}
+// → Set（有池子的代币）；任何一批失败返回 null（调用方退回逐个查）
+export async function dexOpenBatch(tokens) {
+  const L = [...new Set((tokens || []).filter(isAddr).map(t => t.toLowerCase()))], open = new Set();
+  try {
+    for (let i = 0; i < L.length; i += DEX_BATCH) {
+      const part = L.slice(i, i + DEX_BATCH);
+      const r = await fetch('https://api.dexscreener.com/latest/dex/tokens/' + part.join(','), { signal: AbortSignal.timeout(20000) });
+      if (!r.ok) throw new Error('dexscreener ' + r.status);
+      for (const a of parseDexOpen(await r.json(), part)) open.add(a);
+    }
+    return open;
+  } catch { return null; }
+}

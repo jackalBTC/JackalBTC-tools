@@ -86,6 +86,10 @@ Claude 会跟踪雷达日志：免费且通过核验的项目自动打，拿不�
 
 **付费按份铸币**（按份付 BNB、铸满才开池的发射）单独走 `npm run share-mint`：进度 ≥ 本机门槛、每钱包每项目 ≤ `shareMint.budgetUsd`（默认 30 美元）、铸造合约和代币合约都验证源码、AI 读完源码在台账写下审查记录、防骗检查不是「拦」——五道关口全过才让所有钱包自动参与，否则只出简报。`shareMint.enabled` 默认 `false`（只评估、只出简报）；USDT 付款的一律只出简报。详见上层 README「付费按份铸币」。
 
+**付费 NFT**（ERC721 / ERC1155）默认不自动付费、只出简报（v0.5.0）：想放开把 `spending.allowPaidNft` 改成 `true`。
+
+**钱包整体盈亏**：`npm run pnl`（只读）按钱包算「现在余额 + 转回给你的 − 你转进来的本金」，看板「盈亏」页显示。从别的地址往 AI 钱包转过钱的，把那个地址写进 `config.pnl.ownAddresses`，否则会被当成赚的。多钱包时还可以打开 `auto.backfill`（掉线补领，默认关）。见 [docs/auto.md](docs/auto.md)。
+
 ## 目录
 
 ```

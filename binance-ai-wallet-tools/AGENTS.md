@@ -18,6 +18,8 @@
 | 合约筛查（只读） | `node src/cli/screen.mjs <合约>` |
 | 付费项目防骗检查（只读；有「拦」退出码 2） | `npm run devcheck -- <合约>`；本机门槛 `npm run devcheck -- --thresholds` |
 | 铸造（自动套规则 + 预演把关） | `node src/cli/mint.mjs <项目id> <合约> <数量> [--fn "mint(uint256)"] [--args "{qty},{agentId}"] [--wallet <钱包id>] [--dry]` |
+| 钱包整体盈亏（只读，几分钟；结果在看板「盈亏」页） | `npm run pnl` |
+| 掉线补领（会发交易，只照抄零付费的领取；用户说了才跑） | `npm run backfill -- <钱包id> [起始时间] [--dry]` |
 | 付费按份铸币（五道关口全过才所有钱包参与，否则只出简报；先按 skill 3.1 读源码写 `review`） | `npm run share-mint -- <项目id> <铸造合约> --qty <份数> [--fn …] [--args …] [--token <代币合约>] [--sold-fn "…()"] [--cap-fn "…()"] [--cap <份数>] [--dry]` |
 | 多钱包一起打（先主后副，副钱包只拿免费） | `npm run mint-all -- <项目id> <合约> <数量> [--fn …] [--args …] [--skip-main] [--only w2,w3] [--dry]` |
 | 钱包列表 / 登录状态 | `npm run wallet list` / `npm run wallet status`（`wallet add` / `wallet login` 要用户扫码，让用户自己在终端运行） |
@@ -39,9 +41,13 @@
 ## 数据
 用户配置了 Telegram 机器人（`npm run telegram` / 后台服务）时，`events.jsonl` 里的铸造成功、`brief`、`abort`，以及 `news.json` 里新增的项目动态会被推到用户手机，所以写这些内容时要像直接发给用户的消息一样清楚准确。
 
-`data/` 下：`projects.json`（台账）、`watch.json`（持仓：`collections` 是 NFT 系列，`tokens` 是花钱换到的代币——**用户让你买币 / 参与发射后，把代币加进 `tokens` 并写上成本**）、`realized.json`（已实现盈亏——**每次卖出后追加一条 `{ ts, project, name, cost, proceeds, tx }`**）、`events.jsonl`（日志）、`spend.jsonl`（花费账本）、`news.json`（官推动态）、`watch-accounts.json`（跟踪的官推）、`radar-*.json(l)`（雷达状态）、`claims.json`（到点自动领取的登记——**用户让你登记一个到点领取时写这里，格式见 docs/auto.md，`to` / `data` 必须是核实过的官方合约和调用**）、`market-watch.json`（Element 监控）、`take-profit-state.json` / `redeem-state.json` / `approvals-state.json`（自动任务的状态，不要手改）、`thresholds.json`（防骗检查的本机随机门槛，不要改，也不要把数字发到公开的地方）、`share-mint-gate.json`（按份铸币的一次性通行证，只由 `share-mint` 写）、`nft-images.json` / `devcheck-codes.json`（防骗检查的缓存）。看板 `npm run dashboard` 只读这些文件。
+`data/` 下：`projects.json`（台账）、`watch.json`（持仓：`collections` 是 NFT 系列，`tokens` 是花钱换到的代币——**用户让你买币 / 参与发射后，把代币加进 `tokens` 并写上成本**）、`realized.json`（已实现盈亏——**每次卖出后追加一条 `{ ts, project, name, cost, proceeds, tx }`**）、`events.jsonl`（日志）、`spend.jsonl`（花费账本）、`news.json`（官推动态）、`watch-accounts.json`（跟踪的官推）、`radar-*.json(l)`（雷达状态）、`claims.json`（到点自动领取的登记——**用户让你登记一个到点领取时写这里，格式见 docs/auto.md，`to` / `data` 必须是核实过的官方合约和调用**）、`market-watch.json`（Element 监控）、`take-profit-state.json` / `redeem-state.json` / `approvals-state.json`（自动任务的状态，不要手改）、`thresholds.json`（防骗检查的本机随机门槛，不要改，也不要把数字发到公开的地方）、`share-mint-gate.json`（按份铸币的一次性通行证，只由 `share-mint` 写）、`nft-images.json` / `devcheck-codes.json`（防骗检查的缓存）、`pnl.json` / `pnl-cache/`（钱包整体盈亏，`npm run pnl` 写）、`pnl-adjust.json`（盈亏加回项，用户让你记「转出后卖了多少」时写这里）、`backfill-state.json` / `login-state.json`（掉线补领的状态，不要手改）。看板 `npm run dashboard` 只读这些文件。
 
 **付费按份铸币**（按份付 BNB、铸满才开池）：先跑 `devcheck`，再读铸造合约和代币合约的源码，在 `projects.json` 该项目里如实写 `review`（四项：钱留在合约里 / 没人能随意提走 / 代币铸造入口为 0 或已锁 / LP 打到销毁地址，外加 `by` `at` `contract` `token` `notes`）。**没读到源码、有任何疑问就写 `false`，绝不能为了过关填 `true`**；然后跑 `share-mint`，跑完一行回报。关口没过就放「待确认」，不要改记录去凑。`config.shareMint` 默认关，不要替用户打开；USDT 付款的只出简报。详见 skill 3.1。
+
+**付费 NFT**（ERC721 / ERC1155）默认只出简报：`mint` 会自动只拿免费张。只有用户在这个对话里亲口说了「打」这个 NFT 项目，才加 `--allow-paid-nft`（先用 `log.mjs approve` 记下原话）；不要去改 `spending.allowPaidNft`。
+
+**盈亏对不上**：`npm run pnl` 的「核对」差得多，多半是用户从别的地址往 AI 钱包转过钱。问用户那个地址是不是他自己的，是的话请他自己写进 `config.pnl.ownAddresses`（你不能改配置）。
 
 自动任务（`config.auto`）会发交易，默认全关，**不要替用户打开**（`config/config.json` 你不能改）。用户想让某个代币不被自动止盈卖掉，在 `watch.json` 的代币条目里加 `"hold": true`；只想卖一次就加 `"sellOnce": 0.5`。
 

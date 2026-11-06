@@ -3,12 +3,14 @@
 // 只卖 watch.json 里登记的代币，只换回 BNB（baw market-order swap），从不买入、不授权、不转账。
 // 平均成本价 = 成本（cost，美元 / BNB 折美元）÷ 第一次看到时的持仓数量。没写成本的代币不卖。
 // 成本绝不记成 0 / NaN：BNB 价格读不到就用上一次读到的（存在状态的 _bnbUsd），也没有就整轮跳过；成本没定下来的每轮重算。
+// 免费领的代币（watch.json 里 free: true，没有成本）：开盘（第一次有报价）先卖一半，剩下的以开盘价当成本照常走阶梯；
+//   还没开盘的先批量问 DexScreener，没池子的每个币约 1 小时才补查一次 GeckoTerminal（几百个免费币一轮也只要几十秒）。
 // 币安把代币标了风险、需要在 App 里确认（错误 30003001）时：不重试，发一条「重要」动态请你去 App 确认，然后在成交记录里等它成交再记账。
 import { config, readJson, writeJson } from '../lib/config.mjs';
 import { baw, rpc, bnbUsd, tokenBalance, fmtUnits } from '../lib/chain.mjs';
-import { bestPrice } from '../lib/price.mjs';
+import { bestPrice, dexOpenBatch } from '../lib/price.mjs';
 import { listWallets, envFor, sessionOk, readWatch } from '../lib/wallets.mjs';
-import { pickStage, stageName, costToUsd, usableBnbUsd } from '../lib/takeprofit.mjs';
+import { pickStage, stageName, costToUsd, usableBnbUsd, unopenedFree, skipUnopened, nextProbe } from '../lib/takeprofit.mjs';
 import { log, addNews, event, withLock, DRY } from './common.mjs';
 
 const BNB = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';   // baw 里原生 BNB 的写法
@@ -45,7 +47,7 @@ async function settle(w, t, s, px) {   // 挂起的卖单：成交了就记账�
   if (o.status === 'FINISHED') {
     const sold = Number(o.fromTokenQty), got = Number(o.toTokenActualQty);
     s.done[p.stage] = new Date().toISOString(); s.pending = null; s.errors = 0;
-    const name = stageName(p.stage, t), costPart = s.origAmount ? s.costUsd * sold / s.origAmount : 0;
+    const name = stageName(p.stage, t), costPart = t.free === true ? 0 : s.origAmount ? s.costUsd * sold / s.origAmount : 0;   // 免费币的「成本」是开盘价，只用来算倍数，不记进盈亏
     const tx = /^0x[0-9a-fA-F]{64}$/.test(o.txHash || '') ? o.txHash : null;
     const R = readJson('realized.json', []);
     R.push({ ts: new Date().toISOString().slice(0, 10), project: t.id, name: `${t.symbol || t.name} 止盈：${name}（${Math.round(sold).toLocaleString('en-US')} 枚）`,
@@ -67,25 +69,35 @@ export async function takeProfitTick() {
   const px = usableBnbUsd(await bnbUsd().catch(() => NaN), st._bnbUsd);
   if (!px) { log('SKIP 读不到 BNB 价格，也没有上一次的价格，这轮不动'); return; }
   st._bnbUsd = px;
-  for (const w of await listWallets()) {
+  const WS = await listWallets(), now = Date.now();
+  const unopened = [];
+  for (const w of WS) for (const t of readWatch(w).tokens || []) if (/^0x[0-9a-fA-F]{40}$/.test(t.contract || '') && unopenedFree(t, st[`${w.id}:${t.id}`])) unopened.push(t.contract);
+  const OPEN = unopened.length ? await dexOpenBatch(unopened) : new Set();
+  for (const w of WS) {
     let gas = null;
     for (const t of readWatch(w).tokens || []) {
       if (!/^0x[0-9a-fA-F]{40}$/.test(t.contract || '') || !/^[a-z0-9][a-z0-9_-]{0,40}$/i.test(t.id || '')) continue;
       const key = `${w.id}:${t.id}`, s = st[key] ||= { done: {} };
+      if (skipUnopened(t, s, OPEN, now)) continue;   // 免费币没开盘、还没到补查时间：这轮连余额都不查
       try {
         const bal = await tokenBalance(t.contract, w.address);
         if (s.origAmount == null) {   // 第一次见：定下原始持仓和成本（美元）
           if (bal.raw === 0n) continue;
           s.origAmount = Number(bal.raw) / 10 ** bal.decimals;
-          s.costUsd = costToUsd(t.cost, px);
+          s.costUsd = t.free === true ? null : costToUsd(t.cost, px);
         }
-        if (!(s.costUsd > 0)) { s.costUsd = costToUsd(t.cost, px); if (!s.costUsd) { s.costUsd = null; continue; } }   // 没写成本 / 以前记坏了：每轮重算，算不出不卖
+        if (t.free !== true && !(s.costUsd > 0)) { s.costUsd = costToUsd(t.cost, px); if (!s.costUsd) { s.costUsd = null; continue; } }   // 没写成本 / 以前记坏了：每轮重算，算不出不卖
         await settle(w, t, s, px);
         if (s.pending) continue;
+        if (unopenedFree(t, s)) s.probeAt = nextProbe();
         const d = await bestPrice(t.contract).catch(() => null); if (!d) continue;   // 还没开盘
+        if (unopenedFree(t, s)) {   // 免费币第一次有报价 = 开盘：开盘价当成本（只用来算倍数）
+          s.openPx = d.price; s.openAt = new Date().toISOString(); s.costUsd = d.price * s.origAmount;
+          log('OPEN', key, t.symbol, '开盘价', d.price);
+        }
         const q = { price: d.price, mult: d.price / (s.costUsd / s.origAmount) };
         s.peak = Math.max(s.peak || 0, q.mult); s.last = { price: q.price, mult: +q.mult.toFixed(3), at: new Date().toISOString() };
-        const pick = pickStage(t, s, { mult: q.mult, price: q.price, raw: bal.raw, decimals: bal.decimals });
+        const pick = pickStage(t, s, { mult: q.mult, price: q.price, raw: bal.raw, decimals: bal.decimals }, { freeMinUsd: T.freeMinUsd ?? undefined });
         if (!pick) continue;
         gas ??= Number(BigInt(await rpc('eth_getBalance', [w.address, 'latest']))) / 1e18;
         if (gas < config.spending.minBnbForTx) { log('SKIP gas 不够', key, gas.toFixed(5)); continue; }

@@ -86,6 +86,10 @@ Whatever you configure, automatic payment also requires "verified contract sourc
 
 **Paid share-mints** (launches where you buy shares with BNB and liquidity opens once fully minted) go through `npm run share-mint`: progress ≥ this install's threshold, each wallet ≤ `shareMint.budgetUsd` per project (default $30), mint and token contracts both source-verified, an AI source review recorded in the ledger, anti-scam check not blocked – all wallets join automatically only when all five gates pass, otherwise a brief only. `shareMint.enabled` is `false` by default (evaluate and brief only); USDT-paid ones are always brief-only. See "Paid share-mints" in the top-level README.
 
+**Paid NFTs** (ERC721 / ERC1155) are not paid for automatically – brief only (v0.5.0); set `spending.allowPaidNft` to `true` to allow it.
+
+**Per-wallet P&L**: `npm run pnl` (read-only) computes "balance now + what was sent back to you − the money you put in" per wallet, shown on the dashboard's "P&L" page. If you funded the AI wallet from another address, add it to `config.pnl.ownAddresses`, otherwise that money counts as profit. With several wallets you can also turn on `auto.backfill` (missed-mint backfill, off by default). See [docs/auto.md](docs/auto.md).
+
 ## Layout
 
 ```

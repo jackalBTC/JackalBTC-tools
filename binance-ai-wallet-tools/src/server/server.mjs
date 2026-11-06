@@ -298,6 +298,7 @@ http.createServer(async (req, res) => {
         return json({ ...pack(by.today), yesterday: pack(by.yday), total: { ...pack(by.all), since } });
       }
       case '/api/news': return json(readJson('news.json', []).sort((a, b) => String(b.ts).localeCompare(String(a.ts))));
+      case '/api/pnl': return json(readJson('pnl.json', null) || { wallets: [], missing: true });   // 钱包整体盈亏：npm run pnl / 后台 config.pnl.auto 生成
       case '/api/projects': {
         const ps = readJson('projects.json', []);
         const cands = tailLines('radar-candidates.jsonl', 2000).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);

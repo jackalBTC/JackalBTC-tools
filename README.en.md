@@ -1,6 +1,6 @@
 # Binance AI Wallet Tools (binance-ai-wallet-tools)
 
-[中文](README.md) · JackalBTC Tools · current version **v0.4.2** · [Changelog](CHANGELOG.en.md)
+[中文](README.md) · JackalBTC Tools · current version **v0.5.0** · [Changelog](CHANGELOG.en.md)
 
 > ⚠️ Deals with on-chain assets – **not financial advice**. Free mints only by default; read [Before you start](#before-you-start) and [Security design](#security-design) first.
 
@@ -8,6 +8,7 @@
 
 | Version | Date | Changes |
 |---|---|---|
+| **v0.5.0 Per-wallet P&L and missed-mint backfill** | 2026-11-07 | New `pnl` command: overall P&L per wallet (money in, money out, balance, per-project breakdown) on a new "P&L" dashboard page; `backfill` claims free mints a wallet missed while logged out (off by default, zero-payment claims only); free tokens you claimed join take-profit automatically and sell half at launch; free NFTs merged into one table; take-profit checks launches in batches and is much faster; paid NFTs are brief-only by default |
 | **v0.4.2 Paid share-mints** | 2026-11-01 | New `share-mint` command for launches where you buy shares with BNB and liquidity opens once fully minted: all wallets join automatically only when five gates pass (progress ≥ this install's threshold, $30 budget per wallet per project, mint and token contracts both source-verified, an AI source review recorded in the ledger, anti-scam check not blocked); otherwise a brief only. Off by default (`shareMint.enabled`); USDT-paid ones are brief-only |
 | **v0.4.1 Scam checks and cost safety** | 2026-11-01 | An anti-scam check runs before any paid mint (counts real transaction senders, bait self-minting, junk images, mass-deployed identical contracts; thresholds randomised per install), new `devcheck` command; token prices now also from GeckoTerminal (sees v4 pools), holding value capped at 30% of pool liquidity; approval watch (alerts on new approvals, read-only); take-profit falls back to the last BNB price and never takes cost as 0, and holdings with an empty cost are backfilled from the spending ledger |
 | **v0.4.0 Market watch and auto jobs** | 2026-11-01 | Dashboard holdings grouped as "can sell / market but no buyers / new / quiet / exited", exited cards show total cost, total returned and net P&L; Element on-chain fills / bids watch (read-only); optional scheduled auto-claim, card-to-token auto-redeem and auto take-profit (send transactions, off by default); optional Flap Agent new-market alerts in the radar |
@@ -141,7 +142,7 @@ This is the AI's operating manual – it decides how the AI thinks and acts:
 - **References** (`references/`): verification paths by mint mechanism, evidence and fee judgement, radar de-duplication rules.
 
 ### 3. Guarded minting – mint
-`src/cli/mint.mjs` · `node src/cli/mint.mjs <project-id> <contract> <qty> [--fn "mint(uint256)"] [--args "{qty}"] [--wallet <wallet-id>] [--free-only] [--dry]`
+`src/cli/mint.mjs` · `node src/cli/mint.mjs <project-id> <contract> <qty> [--fn "mint(uint256)"] [--args "{qty}"] [--wallet <wallet-id>] [--free-only] [--allow-paid-nft] [--dry]`
 
 One command runs the whole flow; any failed step stops it and logs why:
 
@@ -202,7 +203,8 @@ Runs on your machine only and is read-only: no signing, no transactions, no stor
 | Page | Contents |
 |---|---|
 | **Overview** | Asset value (tokens + NFTs at rarity-aware floor), mints today, project cards waiting for you (collapsible, can be dismissed until the radar sees them again), important project updates, gas balance and alert line, collections (paged), P&L card (realized + unrealized; several sales of one project merged into one row; money spent on things without a price yet shown separately as "awaiting market") |
-| **Holdings & market** | Per NFT collection: units held, cost, floor price, rarity-aware value and P&L, mint progress. Tokens you bought are listed too (balance read on-chain; once DexScreener or GeckoTerminal sees a pool they show the price of the deepest pool and P&L, with value capped at 30% of that pool's liquidity, before that "not launched"). Tokens partly sold by take-profit show "sold / remaining cost". Groups: **can sell** (a real price exists) / **market but no buyers** (Element fills but nobody bids on our token ids, or a market with no listings) / **new** / **quiet** / **exited** (only total cost, total returned and net P&L; "no sale records" if none) / **written off**. Recomputed as soon as the holdings file changes; the page refreshes every minute |
+| **Holdings & market** | Per NFT collection: units held, cost, floor price, rarity-aware value and P&L, mint progress. Tokens you bought are listed too (balance read on-chain; once DexScreener or GeckoTerminal sees a pool they show the price of the deepest pool and P&L, with value capped at 30% of that pool's liquidity, before that "not launched"). Tokens partly sold by take-profit show "sold / remaining cost". Groups: **can sell** (a real price exists) / **market but no buyers** (Element fills but nobody bids on our token ids, or a market with no listings) / **free NFTs (merged)** (NFTs you paid nothing for, as one compact table) / **new** / **quiet** / **exited** (only total cost, total returned and net P&L; "no sale records" if none) / **written off**. Recomputed as soon as the holdings file changes; the page refreshes every minute |
+| **P&L** | Overall P&L per wallet (from `npm run pnl`): money in, money out, balance now, add-backs, net P&L; per-project net BNB / USDT and gas; every deposit / withdrawal; a "reconcile" line that warns you to list a funding address when the numbers don't add up |
 | **X radar** | Running status, spend, recent leads (marked minted / waiting / unhandled), radar log |
 | **Project updates** | Chinese summaries for joined projects, rated important / opportunity / caution / general; important ones can be marked read |
 | **Collection** | Your NFTs with image, id, rarity and traits |
@@ -294,9 +296,11 @@ The dashboard header gets a wallet switcher (shown only with 2+ wallets): one wa
 | **Cost audit** | `costAudit.enabled` | on (no transactions) | Hourly: a collection the spending ledger shows BNB paid for but whose holding cost is empty / 0 gets the cost backfilled from the ledger, with a notice |
 | **Scheduled auto-claim** | `auto.claims.enabled` | **off** | Claims registered in `data/claims.json`: at the time, simulate, then preview; executes only with no debits at all, no approvals, no risk flags, no App confirmation, and the registered token received. The token is added to holdings |
 | **Card-to-token redeem** | `auto.redeem.enabled` | **off** | When someone on-chain burns a card and receives a token, replays the same call for your cards; zero approvals, zero payment, only this wallet's own cards; the preview may only take those cards and must deliver the token |
-| **Auto take-profit** | `auto.takeProfit.enabled` | **off** | Tokens in holdings with a cost (price from the deepest DexScreener / GeckoTerminal pool; if the BNB price can't be read the last good one is used, otherwise the round is skipped – cost is never taken as 0): at 3x sell the cost basis, at 10 / 30 / 50 / 100 / 150 / 200x sell 20% of what is left, after the 10x stage a fall back to 3x sells half. Per token: `hold` (never sell), `sellOnce` (sell once), `firstTp`, `ladder`, `back3`. Sells into BNB only, never buys; when Binance requires App confirmation you are notified |
+| **Auto take-profit** | `auto.takeProfit.enabled` | **off** | Tokens in holdings with a cost (price from the deepest DexScreener / GeckoTerminal pool; if the BNB price can't be read the last good one is used, otherwise the round is skipped – cost is never taken as 0): at 3x sell the cost basis, at 10 / 30 / 50 / 100 / 150 / 200x sell 20% of what is left, after the 10x stage a fall back to 3x sells half. Per token: `hold` (never sell), `sellOnce` (sell once), `firstTp`, `ladder`, `back3`. **Free tokens (`free: true`) sell half at launch**, then follow the ladder using the launch price as cost. Sells into BNB only, never buys; when Binance requires App confirmation you are notified |
+| **Missed-mint backfill** | `auto.backfill.enabled` | **off** | With several wallets: when a wallet comes back online, free mints other wallets claimed while it was logged out are claimed for it – the same call with only the address swapped; the preview must show no debits at all (not even BNB), no approvals, no risk flags and something received. Manual: `npm run backfill -- <wallet-id> [since]` |
+| **Per-wallet P&L** | `pnl.auto` | off (read-only) | Runs `npm run pnl` every 6 hours and writes `data/pnl.json` for the dashboard's "P&L" page; also registers free tokens for take-profit (`pnl.registerFreeTokens`) |
 
-- The three transaction-sending jobs are **off by default**; switches must be `true` / `false` (no quotes – a typo exits with an error). Read [docs/auto.md](binance-ai-wallet-tools/docs/auto.md) (Chinese) first: rules, file formats and risks for each.
+- The four transaction-sending jobs (claims, redeem, take-profit, backfill) are **off by default**; switches must be `true` / `false` (no quotes – a typo exits with an error). Read [docs/auto.md](binance-ai-wallet-tools/docs/auto.md) (Chinese) first: rules, file formats and risks for each.
 - Everything goes through `baw contract-call preview` → `execute` (take-profit uses `baw market-order swap`), shares the mint lock, logs every step and re-checks the wallet session before executing. **No Permit / Permit2, no setApprovalForAll, no approvals, no transfers.**
 - After changing the config, run `npm run service install` again.
 
@@ -436,6 +440,9 @@ All in `data/`, yours only, never committed:
 | `claims.json` | Scheduled claims (optional, format in [docs/auto.md](binance-ai-wallet-tools/docs/auto.md)) |
 | `market-watch.json` | Element watch progress and the last 7 days of fills / bids |
 | `take-profit-state.json` / `redeem-state.json` | Which take-profit stages ran, pending sell orders; redeem samples and progress |
+| `pnl.json` / `pnl-cache/` | Per-wallet P&L result (read by the dashboard's "P&L" page) and transaction-history cache |
+| `pnl-adjust.json` | Optional P&L add-backs: `{ "walletId": { "project": [{ "usd": 12, "note": "sold after sending out" }, { "bnb": 0.01, "at": "2026-11-01" }] } }` |
+| `backfill-state.json` / `login-state.json` | Backfill: whether each project was claimed for each wallet; each wallet's login state |
 | `flap-state.json` | How many Flap markets were seen |
 
 ## FAQ

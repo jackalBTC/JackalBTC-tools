@@ -309,6 +309,7 @@ table.rev .warn{color:var(--warn,#d98a00)} table.rev .ok{color:var(--good,#1a9a5
   <div class="viewtabs" id="viewTabs">
     <button data-v="overview"><i class="ph ph-squares-four"></i>总览<span class="b" id="tbPend"></span></button>
     <button data-v="market"><i class="ph ph-chart-line-up"></i>持仓与市场</button>
+    <button data-v="pnl"><i class="ph ph-scales"></i>盈亏</button>
     <button data-v="radar"><i class="ph ph-broadcast"></i>推特雷达</button>
     <button data-v="news"><i class="ph ph-megaphone"></i>官推动态<span class="b" id="tbNews"></span></button>
     <button data-v="nft"><i class="ph ph-images"></i>收藏</button>
@@ -358,6 +359,13 @@ table.rev .warn{color:var(--warn,#d98a00)} table.rev .ok{color:var(--good,#1a9a5
     <h2><i class="ph ph-chart-line-up"></i>持仓与市场 <span class="count" id="posNote"></span></h2>
     <div class="tabs" id="posFilter"></div>
     <div class="pos" id="positions"></div>
+  </section>
+
+  <section class="reveal view" data-view="pnl">
+    <h2><i class="ph ph-scales"></i>钱包整体盈亏 <span class="count" id="pnlvNote"></span></h2>
+    <p class="muted" style="margin:-4px 0 10px;line-height:1.7">按钱包算：现在余额 + 转回给你的 + 加回项 − 你转进来的本金。不依赖卖出记录记全没有，gas、没报价的持仓、没记账的买卖都算在里面。<code>npm run pnl</code> 手动刷新，或在配置里打开 <code>pnl.auto</code>。</p>
+    <div class="kpis" id="pnlvWallets" style="margin:0 0 14px"></div>
+    <div id="pnlvDetail"></div>
   </section>
 
   <section class="reveal view" data-view="radar">
@@ -506,8 +514,8 @@ async function loadPositions(retry = 0) {
 let POSD = null, POSF = 'open';
 try { POSF = localStorage.getItem('lh-posf') || 'open'; } catch {}
 // 分组由服务器算好（p.tier，规则见 src/lib/tiers.mjs）：能卖 / 有市场没买家 / 新打的 / 沉寂 / 已清仓 / 已核销
-const TIER_TABS = [['open', '能卖'], ['nobid', '有市场没买家'], ['new', '新打的'], ['idle', '沉寂'], ['exit', '已清仓'], ['dead', '已核销']];
-const TIER_EMPTY = { open: '还没有能卖出钱的持仓', nobid: '没有「有市场但没人买」的持仓', new: '最近 24 小时没有新打的', idle: '没有沉寂的项目', exit: '没有清仓的项目', dead: '没有核销的项目' };
+const TIER_TABS = [['open', '能卖'], ['free', '免费 NFT（合并）'], ['nobid', '有市场没买家'], ['new', '新打的'], ['idle', '沉寂'], ['exit', '已清仓'], ['dead', '已核销']];
+const TIER_EMPTY = { open: '还没有能卖出钱的持仓', free: '没有免费领的 NFT', nobid: '没有「有市场但没人买」的持仓', new: '最近 24 小时没有新打的', idle: '没有沉寂的项目', exit: '没有清仓的项目', dead: '没有核销的项目' };
 function renderPositions() {
   const d = POSD; if (!d) return;
   const G = Object.fromEntries(TIER_TABS.map(([k]) => [k, []]));
@@ -518,6 +526,15 @@ function renderPositions() {
   const list = POSF === 'all' ? d.positions : G[POSF] || [];
   if (!list.length) { $('#positions').innerHTML = `<div class="empty">${TIER_EMPTY[POSF] || '没有持仓'}</div>`; return; }
   if (POSF === 'idle') list.sort((a, b) => (b.lastNews || b.firstMint || 0) - (a.lastNews || a.firstMint || 0));
+  if (POSF === 'free') {   // 免费 NFT 合并成一张紧凑表：一行一个项目
+    const L2 = [...list].sort((a, b) => (b.el?.fills || 0) - (a.el?.fills || 0) || (b.firstMint || 0) - (a.firstMint || 0));
+    const n = L2.reduce((a, p) => a + (p.held || 0), 0);
+    const mk = p => p.el?.fills ? `Element 近 7 天成交 ${p.el.fills} 笔${p.el.last ? '，最近 ' + fmt(p.el.last.p, 6) + ' ' + esc(p.el.last.cur) : ''}` : p.marketType === 'none' ? '暂无市场' : p.marketType === 'link' ? '外部市场，没报价' : '有市场，没报价';
+    $('#positions').innerHTML = `<div class="card" style="grid-column:1/-1"><div class="metric"><span>免费领的 NFT</span><span><b class="num">${L2.length}</b> 个项目 · <b class="num">${fmt(n, 0)}</b> 张 · 现在都没有报价，按 0 算</span></div>
+      <p class="muted" style="margin:8px 0 12px;line-height:1.7">只花了 gas。哪个出现报价（地板价 / 求购）会自动移到「能卖」，不会漏。</p>
+      <div style="overflow-x:auto"><table class="rev"><thead><tr><th>项目</th><th>张数</th><th>市场</th><th>领取时间</th><th>合约</th></tr></thead><tbody>${L2.map(p => `<tr><td>${esc(p.name)}${p.wallets ? ` <span class="muted">· ${p.wallets.map(esc).join('、')}</span>` : ''}</td><td class="num">${p.held}</td><td class="muted">${mk(p)}</td><td class="muted">${p.firstMint ? ts(p.firstMint) : '-'}</td><td><a class="addr" href="${scan(p.contract)}" target="_blank" data-copy="${esc(p.contract)}"><span>${short(p.contract)}</span><i class="ph ph-copy"></i></a></td></tr>`).join('')}</tbody></table></div></div>`;
+    return;
+  }
   {
     $('#positions').innerHTML = list.map(p => {
       const sane = v => v != null && isFinite(v) && v < 1e9 ? v : null;
@@ -784,6 +801,35 @@ document.addEventListener('click', e => {
   if (e.target.closest('#readAll')) { const r = getRead(); NEWS.filter(x => x.level === '重要').forEach(x => r[nid(x)] = Date.now()); setRead(r); renderNews(); toast('重要动态已全部标为已读'); }
 });
 
+// ---------- 钱包整体盈亏（data/pnl.json，npm run pnl 生成） ----------
+let PNL = null, PNLW = null;
+async function loadPnl() { PNL = await get('/api/pnl').catch(e => ({ error: e.message })); renderPnlView(); }
+function renderPnlView() {
+  const d = PNL; if (!d) return;
+  const sg = x => `<b class="num${x >= 0 ? ' accent' : ''}"${x >= 0 ? '' : ' style="color:var(--bad)"'}>${x >= 0 ? '+' : ''}${usd(x)}</b>`;
+  if (d.error || d.missing || !d.wallets?.length) {
+    $('#pnlvNote').textContent = ''; $('#pnlvWallets').innerHTML = '';
+    $('#pnlvDetail').innerHTML = `<div class="empty">${d.error ? '读取失败：' + esc(d.error) : '还没有算过。在终端运行 <code>npm run pnl</code>（要几分钟，只读不发交易），或在 config/config.json 打开 <code>pnl.auto</code> 让后台每 6 小时算一次。'}</div>`;
+    return;
+  }
+  $('#pnlvNote').textContent = `${ts(d.updated)} 更新 · BNB 按 $${fmt(d.bnbUsd, 0)} · 合计 ${d.total >= 0 ? '+' : ''}${usd(d.total)}`;
+  if (!d.wallets.some(w => w.id === PNLW)) PNLW = d.wallets[0].id;
+  $('#pnlvWallets').innerHTML = d.wallets.map(w => `<button class="card" data-pw="${esc(w.id)}" style="text-align:left;cursor:pointer;font:inherit;color:inherit;${w.id === PNLW ? 'outline:2px solid var(--accent)' : ''}"><div class="muted">${esc(w.label || w.id)}${w.stale ? '（没刷新到，沿用上一次）' : ''}</div><div style="font-size:24px;margin:6px 0">${sg(w.sum.pnl)}</div><div class="muted">本金 ${usd(w.sum.in)} · 现在 ${usd(w.sum.balance)}</div></button>`).join('');
+  const w = d.wallets.find(x => x.id === PNLW), s = w.sum, diff = w.check.actual - w.check.expect;
+  const rowsHtml = (w.rows || []).map(r => `<tr><td>${esc(r.name)}${r.notes?.length ? `<div class="muted">${r.notes.map(esc).join('；')}</div>` : ''}</td><td class="num">${r.n}</td><td class="num">${usd(r.net)}</td><td class="num">${r.add ? usd(r.add) : '-'}</td><td class="num">${usd(r.gas)}</td><td>${sg(r.pnl)}</td></tr>`).join('');
+  const flowsHtml = (w.flows || []).map(f => `<tr><td class="muted">${esc(f.tm)}</td><td>${f.dir === 'in' ? '转入' : '转出'}</td><td>${esc(f.who)}</td><td class="num">${fmt(f.amt, 5)} ${esc(f.tok)}</td><td class="num">${usd(f.usd)}</td></tr>`).join('');
+  $('#pnlvDetail').innerHTML = `<div class="card" style="margin-bottom:14px">
+    ${[['你转进来的本金', usd(s.in)], ['转回给你的', usd(s.out)], ['现在钱包里（含代币现值）', usd(s.balance)], ['加回项（data/pnl-adjust.json）', usd(s.added)], ['净盈亏', sg(s.pnl)], ['gas 合计', fmt(s.gasBnb, 5) + ' BNB'],
+      ['核对（转入 − 转出 + 项目收支 − gas ≈ 现有 BNB/USDT）', `${usd(w.check.expect)} ≈ ${usd(w.check.actual)}${Math.abs(diff) > 5 ? ' <span style="color:var(--bad)">差得多：可能有入金地址没认出来，登记到 config.pnl.ownAddresses</span>' : ''}`]]
+      .map(([k, v]) => `<div class="metric"><span>${k}</span><span>${v}</span></div>`).join('')}
+    <p class="muted" style="margin-top:8px">${w.txs} 笔交易${w.since ? '，最早 ' + esc(String(w.since).slice(0, 10)) : ''}</p></div>
+    <h3 style="margin:10px 0">按项目</h3>
+    <div class="card" style="padding:4px 0;overflow-x:auto"><table class="rev"><thead><tr><th>项目</th><th>笔数</th><th>BNB/USDT 净收支</th><th>加回</th><th>gas</th><th>盈亏</th></tr></thead><tbody>${rowsHtml || '<tr><td colspan="6" class="muted">没有</td></tr>'}</tbody></table></div>
+    <h3 style="margin:16px 0 10px">资金进出</h3>
+    <div class="card" style="padding:4px 0;overflow-x:auto"><table class="rev"><thead><tr><th>时间</th><th>方向</th><th>对方</th><th>数量</th><th>当时约</th></tr></thead><tbody>${flowsHtml || '<tr><td colspan="5" class="muted">没有认出转账（入金地址登记在 config.pnl.ownAddresses）</td></tr>'}</tbody></table></div>`;
+}
+document.getElementById('pnlvWallets').addEventListener('click', e => { const b = e.target.closest('[data-pw]'); if (b) { PNLW = b.dataset.pw; renderPnlView(); } });
+
 // ---------- 分页 ----------
 let VIEW = 'overview';
 try { VIEW = localStorage.getItem('lh-view') || 'overview'; } catch {}
@@ -799,7 +845,7 @@ showView(VIEW);
 async function all() {
   const b = $('#refresh'); b.classList.add('spin');
   await loadOverview();
-  await loadProjects(); await Promise.allSettled([loadReview(), loadNews(), loadNfts(), loadEvents(), loadRadar(), loadPositions(), loadRealized()]);
+  await loadProjects(); await Promise.allSettled([loadReview(), loadNews(), loadNfts(), loadEvents(), loadRadar(), loadPositions(), loadRealized(), loadPnl()]);
   b.classList.remove('spin');
 }
 $('#refresh').onclick = () => all().then(() => toast('已刷新'));
@@ -814,6 +860,7 @@ setInterval(() => { loadProjects(); loadEvents(); loadRadar(); loadNews(); loadW
 setInterval(loadPositions, 60000);
 setInterval(loadRealized, 60000);
 setInterval(loadReview, 300000);
+setInterval(loadPnl, 300000);
 </script>
 </body>
 </html>

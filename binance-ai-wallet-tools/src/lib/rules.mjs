@@ -34,7 +34,8 @@ export function checkPreview(data, { me, total }) {
 
 // 按花钱规则决定付费几张。
 //   free / paid：免费张数、想付费的张数；totalOf(q)：q 张一共要付多少 wei（async，可能返回 null）
-//   ctx：{ spending, usdPerBnb, verified, official, freeOnly, clone, scam, spentToday, paidSoFar }（scam：防骗检查拦下的原因，见 src/lib/devcheck.mjs）
+//   ctx：{ spending, usdPerBnb, verified, official, freeOnly, clone, scam, spentToday, paidSoFar, paidNft }（scam：防骗检查拦下的原因，见 src/lib/devcheck.mjs；
+//         paidNft：这是 NFT 合约（ERC721 / ERC1155）、而且没允许自动付费打 NFT——付费 NFT 默认只出简报，见 spending.allowPaidNft）
 // 返回 { paid, total, notes }：不能付的直接归零（单价超、没开自动付费、未验证、无官源、模板克隆、防骗检查不通过），
 // 张数 / 每日金额超了就一张张往下减。
 export async function planPaid({ free, paid, totalOf }, ctx) {
@@ -51,6 +52,7 @@ export async function planPaid({ free, paid, totalOf }, ctx) {
   if (!ctx.official) hard.push('台账里没有官网 / 官推');
   if (ctx.clone) hard.push(`疑似批量模板项目（${ctx.clone}）`);
   if (ctx.scam) hard.push(`防骗检查不通过（${ctx.scam}）`);
+  if (ctx.paidNft) hard.push('付费 NFT 默认不自动打，只出简报（spending.allowPaidNft）');
   if (bnb(total) > S.gasLikeBnb && unitUsd > S.maxUnitUsd) hard.push(`单张约 $${unitUsd.toFixed(2)} 超过 $${S.maxUnitUsd}`);
   if (hard.length) return { paid: 0, total: 0n, notes: hard };
   const want = paid;

@@ -57,12 +57,26 @@ function validate(cfg) {
   // 付费按份铸币（npm run share-mint）：开关必须明确写 true / false；预算是每个钱包每个项目最多花多少美元
   errs.push(...validateShareMint(cfg.shareMint));
   // 会发交易的自动功能：开关必须明确写 true / false，写错直接退出（不会因为写成 "true" 字符串就悄悄打开或关掉）
-  for (const k of ['claims', 'redeem', 'takeProfit']) {
+  if (sp.allowPaidNft != null && typeof sp.allowPaidNft !== 'boolean') errs.push('spending.allowPaidNft 必须是 true 或 false（不要加引号）');
+  const pn = cfg.pnl;
+  if (pn) {
+    if (typeof pn.auto !== 'boolean') errs.push('pnl.auto 必须是 true 或 false');
+    if (!num(pn.everyHours, 1)) errs.push('pnl.everyHours 至少 1');
+    if (pn.since != null && !Number.isFinite(Date.parse(pn.since))) errs.push('pnl.since 要么是 null，要么是日期（例如 "2026-10-01"）');
+    if (!Array.isArray(pn.ownAddresses) || pn.ownAddresses.some(x => !/^0x[0-9a-fA-F]{40}$/.test(typeof x === 'string' ? x : x?.address))) errs.push('pnl.ownAddresses 必须是地址数组：["0x…"] 或 [{ "address": "0x…", "label": "…" }]');
+    if (!Array.isArray(pn.merge) || pn.merge.some(m => { try { new RegExp(m?.match); return !m?.name; } catch { return true; } })) errs.push('pnl.merge 必须是 [{ "match": "正则", "name": "显示名" }]');
+    if (pn.skipTokens != null && (!Array.isArray(pn.skipTokens) || pn.skipTokens.some(a => !/^0x[0-9a-fA-F]{40}$/.test(a)))) errs.push('pnl.skipTokens 必须是代币地址数组');
+    if (pn.registerFreeTokens != null && typeof pn.registerFreeTokens !== 'boolean') errs.push('pnl.registerFreeTokens 必须是 true 或 false');
+  }
+  for (const k of ['claims', 'redeem', 'takeProfit', 'backfill']) {
     const a = cfg.auto?.[k];
     if (a && typeof a.enabled !== 'boolean') errs.push(`auto.${k}.enabled 必须是 true 或 false（不要加引号）`);
     if (a && a.everyMinutes != null && !num(a.everyMinutes, 1)) errs.push(`auto.${k}.everyMinutes 至少 1`);
   }
   if (cfg.auto?.redeem && !num(cfg.auto.redeem.firstBlocks, 0)) errs.push('auto.redeem.firstBlocks 必须是不小于 0 的数字');
+  if (cfg.auto?.takeProfit?.freeMinUsd != null && !num(cfg.auto.takeProfit.freeMinUsd, 0)) errs.push('auto.takeProfit.freeMinUsd 必须是不小于 0 的数字');
+  const bf = cfg.auto?.backfill;
+  if (bf && (!num(bf.maxLookbackHours ?? 72, 1) || !num(bf.maxPerRun ?? 50, 1))) errs.push('auto.backfill.maxLookbackHours / maxPerRun 至少 1');
   const sl = cfg.auto?.takeProfit?.slippage;
   if (cfg.auto?.takeProfit && !(num(sl, 0.1) && sl <= 50)) errs.push('auto.takeProfit.slippage 必须是 0.1–50 之间的数字（百分比）');
   if (cfg.dashboard?.host &&!['127.0.0.1', 'localhost', '::1'].includes(cfg.dashboard.host)) errs.push('dashboard.host 只能是本机地址（127.0.0.1 / localhost）');

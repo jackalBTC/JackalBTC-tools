@@ -22,7 +22,9 @@
     "maxDailyBnb": null,
     "gasLikeBnb": 0.0005,
     "_gasLikeBnb": "一次铸造付费合计不超过这个数时，视同 gas，不受单价 / 张数上限（但仍受 allowAutoPaid 和验证要求约束）",
-    "minBnbForTx": 0.003
+    "minBnbForTx": 0.003,
+    "allowPaidNft": false,
+    "_allowPaidNft": "false = 付费 NFT（ERC721 / ERC1155）不自动打，只出简报（免费张照打）；true = 和付费代币一样按上面的规则自动付费。单次放行用 mint.mjs 的 --allow-paid-nft（只在你亲口说「打」时）"
   },
   "alerts": {
     "lowBnb": 0.03
@@ -149,6 +151,24 @@
     "budgetUsd": 30,
     "_budgetUsd": "每个钱包在每个项目最多花多少美元（BNB 按 Chainlink 价格折算；之前在这个项目花过的也算进去）"
   },
+  "pnl": {
+    "_说明": "钱包整体盈亏（npm run pnl，看板「盈亏」页）：按钱包算 现在余额 + 转回给你的 + 加回项 − 你转进来的本金。只读，不发交易。见 docs/auto.md「钱包整体盈亏」",
+    "auto": false,
+    "_auto": "true = 后台服务 auto 每 everyHours 小时算一次；false = 只在你运行 npm run pnl 时算",
+    "everyHours": 6,
+    "since": null,
+    "_since": "从哪天开始算（例如 \"2026-10-01\"）；null = baw 默认的最近 3 个月",
+    "ownAddresses": [],
+    "_ownAddresses": "你自己的其它地址（往 AI 钱包转钱 / 从 AI 钱包提钱用的），写成 [\"0x…\"] 或 [{ \"address\": \"0x…\", \"label\": \"我的冷钱包\" }]。不登记的话，从这些地址转进来的钱会被当成赚的。wallets.json 里的钱包和交易所热钱包会自动认出来",
+    "merge": [],
+    "_merge": "把同一项目的不同名字并成一行：[{ \"match\": \"正则\", \"name\": \"显示名\" }]",
+    "contractNames": {},
+    "_contractNames": "只有 BNB / USDT 进出的交易按被调用的合约归类：{ \"0x合约\": \"显示名\" }（台账 projects.json 里登记过的合约会自动认出来）",
+    "registerFreeTokens": true,
+    "_registerFreeTokens": "顺便把免费领到、还不在 watch.json 里的代币登记进去（free: true，开盘先卖一半，要 auto.takeProfit 打开才会真的卖）。只写 watch.json，不发交易",
+    "skipTokens": [],
+    "_skipTokens": "不要自动登记的代币地址（比如你有别的程序在卖的）"
+  },
   "costAudit": {
     "_说明": "成本自检：每小时一次，花费账 spend.jsonl 里付过 BNB、持仓 watch.json 里成本却是空 / 0 的系列，按账上实际付出补上并发一条通知。不发交易。由后台服务 auto 运行",
     "enabled": true
@@ -165,10 +185,19 @@
       "firstBlocks": 20000,
       "_enabled": "卡 / NFT 自动兑换代币：照抄链上别人的兑换调用，只做零授权、零付费、用本钱包自己的卡；预演只交卡、收到代币才执行"
     },
+    "backfill": {
+      "enabled": false,
+      "everyMinutes": 5,
+      "maxLookbackHours": 72,
+      "maxPerRun": 50,
+      "_enabled": "掉线补领（多钱包才有用）：某个钱包从掉线变回在线时，把掉线期间别的钱包免费领过的项目给它补一遍。照抄那笔交易、只换成本钱包地址；预演必须零扣款（连 BNB 都不行）、零授权、零风险提示、确实收到东西才执行。手动：npm run backfill -- <钱包id>"
+    },
     "takeProfit": {
       "enabled": false,
       "everyMinutes": 2,
       "slippage": 10,
+      "freeMinUsd": 0.3,
+      "_freeMinUsd": "免费领的代币（watch.json 里 free: true）开盘先卖一半；这一半不值这么多美元就先不卖（不够 gas），等涨上来",
       "_enabled": "自动止盈：watch.json 里登记了成本的代币，3 倍卖回本钱、10/30/50/100/150/200 倍各卖剩余 20%、到过 10 倍跌回 3 倍卖一半；只换回 BNB，从不买入。单个代币可设 hold / sellOnce / firstTp / ladder / back3，见 docs/auto.md"
     }
   }

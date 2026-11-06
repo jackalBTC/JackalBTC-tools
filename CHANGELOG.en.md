@@ -6,6 +6,28 @@ What changed in each version, newest first. To upgrade: `git pull` in the repo, 
 
 ---
 
+## v0.5.0 — 2026-11-07 · Per-wallet P&L, missed-mint backfill, take-profit for free tokens
+
+### New
+- **Per-wallet P&L** (`npm run pnl`, new "P&L" page on the dashboard): for each wallet, "everything in the wallet now + what was sent back to you + add-backs − the money you put in". The old P&L card only counted projects with recorded sales, so it missed gas, unpriced holdings and unrecorded trades and tended to look too good; this does not depend on sales being recorded.
+  - Per wallet: money in, money out, balance now, net P&L, a per-project breakdown (net BNB / USDT, gas, add-backs) and every deposit / withdrawal.
+  - Only these count as deposits / withdrawals: your own wallets in `wallets.json`, addresses you list in `config.pnl.ownAddresses`, and exchange hot wallets (detected automatically). **If you funded the AI wallet from another address, list it**, otherwise that money is counted as profit; the dashboard's "reconcile" line warns you when the numbers don't add up.
+  - Money you made after sending things out (sold elsewhere, still holding, refunds due) can be added back in `data/pnl-adjust.json`.
+  - Read-only, no transactions. History is fetched incrementally; a partial fetch is never cached, and a wallet that can't be read keeps its last result, marked as stale. Turn on `pnl.auto` to recompute every 6 hours in the background (off by default).
+- **Missed-mint backfill** (`auto.backfill.enabled`, off by default; manual: `npm run backfill -- <wallet-id> [since]`): with several wallets, free mints that other wallets claimed while one wallet was logged out are claimed for it once it logs back in. It replays that claim transaction with only the address swapped to this wallet; the preview must show no debits at all (not even BNB), no approvals, no risk flags, no App confirmation, and something received.
+- **Free tokens join take-profit automatically**: the P&L run also registers tokens you claimed without paying into `watch.json` (`free: true`). Airdrops, bought tokens, NFTs and dust under 1 token are skipped; tokens you paid for are listed for you, not added. Turn off with `pnl.registerFreeTokens`, exclude with `pnl.skipTokens`.
+- **Take-profit rule for free tokens**: a `free: true` token sells half when it first gets a price (launch); the rest uses the launch price as its cost and follows the usual 10 / 30 / 50 / 100 / 150 / 200x ladder and the "back to 3x after 10x" rule. If that half is worth less than `auto.takeProfit.freeMinUsd` (default $0.30) it waits.
+- **"Free NFTs (merged)" group on the dashboard**: NFTs you hold, paid nothing for and never sold are shown as one compact table (project, units, market, claim time, contract) instead of a card each; anything that gets a price moves back to "can sell".
+
+### Improved
+- **Much faster take-profit**: unlaunched free tokens are checked against DexScreener in batches of 30; those without a pool get a GeckoTerminal re-check only about once an hour each, staggered. A round over hundreds of free tokens drops from minutes to tens of seconds and GeckoTerminal is no longer rate-limited.
+
+### Security
+- **Paid NFTs are not minted automatically – brief only**: when the paid part of a `mint` is an NFT contract (ERC721 / ERC1155), it only takes the free units and logs why. Set `spending.allowPaidNft` to `true` to allow it, or pass `--allow-paid-nft` for one run (the AI may add it only when you said "mint it" for that project in the conversation). Rules for paid tokens are unchanged.
+- Of the new automatic jobs only the backfill sends transactions; it is off by default and only replays **zero-payment** claims (samples that paid BNB, and projects anyone paid for, are skipped). No new approvals, Permit / Permit2, setApprovalForAll or transfer code.
+
+---
+
 ## v0.4.2 — 2026-11-01 · Paid share-mints
 
 ### New
